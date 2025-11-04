@@ -1,0 +1,96 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code (optional)
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control.
+# Uncomment to ignore if desired.
+# .vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+# Build outputs
+/build/
+**/build/
+
+# Web related (generated)
+lib/generated_plugin_registrant.dart
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android related
+**/android/.gradle/
+**/android/.cxx/
+**/android/captures/
+**/android/local.properties
+**/android/key.properties
+**/*.keystore
+**/*.jks
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# iOS related
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/.generated/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/profile
+**/ios/shared
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# macOS related
+**/macos/Flutter/ephemeral/
+**/macos/Pods/
+**/macos/.symlinks/
+**/macos/Flutter/GeneratedPluginRegistrant.*
+
+# Windows related
+**/windows/flutter/ephemeral/
+
+# Linux related
+**/linux/flutter/ephemeral/
+
+# Xcode user data and derived data
+**/*.xcworkspace/xcuserdata/
+**/xcuserdata/
+**/DerivedData/
+*.xcuserdatad
+
+# Coverage
+coverage/
+
+# Flutter Version Manager (FVM)
+.fvm/

@@ -1,0 +1,508 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../core/design_tokens.dart';
+import '../../localization/localization_ext.dart';
+import '../../models/order.dart';
+import '../../state/app_state.dart';
+import '../../widgets/glass_card.dart';
+import '../../widgets/pill_tabs.dart';
+
+class OrdersPage extends StatefulWidget {
+  const OrdersPage({super.key});
+
+  @override
+  State<OrdersPage> createState() => _OrdersPageState();
+}
+
+class _OrdersPageState extends State<OrdersPage> {
+  int currentTab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final strings = context.strings;
+    final activeOrders = state.activeOrders;
+    final historyOrders = state.historyOrders;
+    final data = currentTab == 0 ? activeOrders : historyOrders;
+    final mediaPadding = MediaQuery.of(context).padding;
+    final bottomSpacing =
+        mediaPadding.bottom + AppSpacing.xxl * 2 + AppSpacing.lg;
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md + mediaPadding.left,
+        AppSpacing.lg + mediaPadding.top,
+        AppSpacing.md + mediaPadding.right,
+        AppSpacing.sm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            strings.tr('ordersTitle'),
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          PillTabs(
+            tabs: [strings.tr('activeTab'), strings.tr('historyTab')],
+            current: currentTab,
+            onChanged: (index) => setState(() => currentTab = index),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: AppDurations.medium,
+              transitionBuilder: (child, animation) {
+                final curved = CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                  reverseCurve: Curves.easeInCubic,
+                );
+                return ClipRect(
+                  child: FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.05, 0),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+              child: data.isEmpty
+                  ? Center(
+                      key: ValueKey('empty-$currentTab'),
+                      child: Text(
+                        currentTab == 0
+                            ? strings.tr('noActiveOrders')
+                            : strings.tr('noHistory'),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : ListView.separated(
+                      key: ValueKey('list-$currentTab'),
+                      physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.only(
+                        top: AppSpacing.sm,
+                        bottom: bottomSpacing,
+                      ),
+                      itemCount: data.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: AppSpacing.sm),
+                      itemBuilder: (context, index) {
+                        final order = data[index];
+                        return _OrderCard(
+                          order: order,
+                          onTap: () => _openDetails(context, order),
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openDetails(BuildContext context, AppOrder order) async {
+    final strings = context.strings;
+    final time =
+        '${order.startTime.format(context)} - ${order.endTime.format(context)}';
+    final date = DateFormat('dd MMMM, yyyy').format(order.date);
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final theme = Theme.of(context);
+        TextEditingController? cancelReasonCtrl;
+        return Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.xl,
+            right: AppSpacing.xl,
+            bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.xl,
+          ),
+          child: GlassCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      strings.tr('orderDetails'),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: AppRadii.pillRadius,
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.12,
+                        ),
+                      ),
+                      child: Text(
+                        order.id,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _DetailTile(
+                  icon: Icons.map_rounded,
+                  title: strings.tr('fromLocation'),
+                  subtitle: '${order.fromRegion}, ${order.fromDistrict}',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _DetailTile(
+                  icon: Icons.flag_rounded,
+                  title: strings.tr('toLocation'),
+                  subtitle: '${order.toRegion}, ${order.toDistrict}',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _DetailTile(
+                  icon: Icons.calendar_today_rounded,
+                  title: date,
+                  subtitle: time,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _DetailTile(
+                  icon: Icons.attach_money_rounded,
+                  title: strings.tr('price'),
+                  subtitle: NumberFormat.currency(
+                    symbol: 'so\'m',
+                    decimalDigits: 0,
+                  ).format(order.price),
+                ),
+                if (order.driverName != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _DetailTile(
+                    icon: Icons.person_rounded,
+                    title: order.driverName!,
+                    subtitle: order.driverPhone ?? '',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _DetailTile(
+                    icon: Icons.directions_car_filled_rounded,
+                    title: order.vehicle ?? '',
+                    subtitle: order.vehiclePlate ?? '',
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                if (order.status == OrderStatus.pending ||
+                    order.status == OrderStatus.active)
+                  StatefulBuilder(
+                    builder: (context, setSheetState) {
+                      cancelReasonCtrl ??= TextEditingController();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: cancelReasonCtrl,
+                            minLines: 2,
+                            maxLines: 4,
+                            decoration: InputDecoration(
+                              labelText: strings.tr('cancelReason'),
+                              alignLabelWithHint: true,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              final reason = cancelReasonCtrl!.text.isEmpty
+                                  ? strings.tr('cancelledByUser')
+                                  : cancelReasonCtrl!.text;
+                              context.read<AppState>().cancelOrder(
+                                order.id,
+                                reason,
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(strings.tr('orderCancelled')),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.cancel_schedule_send_rounded,
+                            ),
+                            label: Text(strings.tr('cancelOrder')),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFDC2626),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.lg,
+                                vertical: AppSpacing.sm,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: AppRadii.rounded,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  )
+                else
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      strings.tr('status_${order.status.name}'),
+                      style: theme.textTheme.labelLarge,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _OrderCard extends StatelessWidget {
+  const _OrderCard({required this.order, required this.onTap});
+
+  final AppOrder order;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final theme = Theme.of(context);
+    final statusColor = switch (order.status) {
+      OrderStatus.pending => theme.colorScheme.primary,
+      OrderStatus.active => const Color(0xFF0EA5E9),
+      OrderStatus.completed => const Color(0xFF10B981),
+      OrderStatus.cancelled => const Color(0xFFEF4444),
+    };
+
+    return GlassCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              borderRadius: AppRadii.rounded,
+              color: statusColor.withValues(alpha: 0.12),
+            ),
+            child: Icon(
+              order.isTaxi
+                  ? Icons.local_taxi_rounded
+                  : Icons.inventory_2_rounded,
+              color: statusColor,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        order.isTaxi
+                            ? strings.tr('taxiOrder')
+                            : strings.tr('deliveryOrder'),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${order.fromDistrict} → ${order.toDistrict}',
+                  style: theme.textTheme.bodyLarge,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    _MetaField(
+                      icon: Icons.schedule_rounded,
+                      label: order.startTime.format(context),
+                    ),
+                    _MetaField(
+                      icon: Icons.calendar_month_rounded,
+                      label:
+                          '${order.date.day.toString().padLeft(2, '0')}.${order.date.month.toString().padLeft(2, '0')}',
+                    ),
+                    _MetaField(
+                      icon: Icons.people_alt_rounded,
+                      label: '${order.passengers}',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: AppRadii.pillRadius,
+                        color: statusColor.withValues(alpha: 0.12),
+                      ),
+                      child: Text(
+                        strings.tr('status_${order.status.name}'),
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      NumberFormat.compactCurrency(
+                        symbol: 'so\'m',
+                        decimalDigits: 0,
+                      ).format(order.price),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaField extends StatelessWidget {
+  const _MetaField({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: AppRadii.pillRadius,
+        color: theme.colorScheme.primary.withValues(alpha: 0.08),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailTile extends StatelessWidget {
+  const _DetailTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.12),
+          ),
+          child: Icon(
+            icon,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
