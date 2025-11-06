@@ -1,14 +1,16 @@
+// lib/src/features/auth/auth_flow.dart
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/auth_api.dart';
+import '../../core/design_tokens.dart';
 import '../../localization/app_localizations.dart';
 import '../../localization/localization_ext.dart';
 import '../../state/app_state.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/gradient_button.dart';
-import '../../widgets/glass_card.dart';
+import '../../widgets/pill_tabs.dart';
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({super.key});
@@ -18,6 +20,7 @@ class AuthFlow extends StatefulWidget {
 }
 
 class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
+  // --- Controllers & State ---
   final TextEditingController loginPhoneCtrl = TextEditingController(
     text: '+998',
   );
@@ -30,21 +33,33 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
   final TextEditingController registerPasswordCtrl = TextEditingController();
   final TextEditingController registerConfirmCtrl = TextEditingController();
 
-  bool showLogin = true;
+  int _currentFormIndex = 0;
   bool loginPasswordVisible = false;
   bool registerPasswordVisible = false;
   bool registerConfirmVisible = false;
   bool loading = false;
+  final FocusNode loginPhoneFocus = FocusNode();
+  final FocusNode loginPasswordFocus = FocusNode();
+  final FocusNode registerPhoneFocus = FocusNode();
+  final FocusNode registerNameFocus = FocusNode();
+  final FocusNode registerPasswordFocus = FocusNode();
+  final FocusNode registerConfirmFocus = FocusNode();
 
   late final AnimationController _logoController;
+  late final Animation<double> _logoScale;
+  int _slideDirection = 1;
 
   @override
   void initState() {
     super.initState();
     _logoController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12),
-    )..repeat();
+      duration: const Duration(milliseconds: 800),
+    )..forward();
+    _logoScale = CurvedAnimation(
+      parent: _logoController,
+      curve: Curves.easeOutBack,
+    );
   }
 
   @override
@@ -55,19 +70,36 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
     registerNameCtrl.dispose();
     registerPasswordCtrl.dispose();
     registerConfirmCtrl.dispose();
+    loginPhoneFocus.dispose();
+    loginPasswordFocus.dispose();
+    registerPhoneFocus.dispose();
+    registerNameFocus.dispose();
+    registerPasswordFocus.dispose();
+    registerConfirmFocus.dispose();
     _logoController.dispose();
     super.dispose();
   }
 
+  // --- Actions ---
   Future<void> _handleLogin() async {
+    _unfocusAll();
+    FocusScope.of(context).unfocus();
     setState(() => loading = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    context.read<AppState>().login(
-      phone: loginPhoneCtrl.text,
-      password: loginPasswordCtrl.text,
-    );
-    setState(() => loading = false);
+    try {
+      await context.read<AppState>().login(
+        phone: loginPhoneCtrl.text.trim(),
+        password: loginPasswordCtrl.text,
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      _showSnack(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showSnack(context.strings.tr('unexpectedError'));
+    } finally {
+      if (!mounted) return;
+      setState(() => loading = false);
+    }
   }
 
   Future<void> _handleRegister() async {
@@ -76,421 +108,477 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
       return;
     }
 
+    _unfocusAll();
+    FocusScope.of(context).unfocus();
     setState(() => loading = true);
-    await Future.delayed(const Duration(milliseconds: 1100));
-    if (!mounted) return;
-    context.read<AppState>().register(
-      phone: registerPhoneCtrl.text,
-      fullName: registerNameCtrl.text,
-      password: registerPasswordCtrl.text,
-    );
-    setState(() => loading = false);
+    try {
+      await context.read<AppState>().register(
+        fullName: registerNameCtrl.text.trim(),
+        phone: registerPhoneCtrl.text.trim(),
+        password: registerPasswordCtrl.text,
+        confirmPassword: registerConfirmCtrl.text,
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      _showSnack(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showSnack(context.strings.tr('unexpectedError'));
+    } finally {
+      if (!mounted) return;
+      setState(() => loading = false);
+    }
+  }
+
+  bool get _isLogin => _currentFormIndex == 0;
+
+  void _switchForm(int index) {
+    if (_currentFormIndex == index) return;
+    _unfocusAll();
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _slideDirection = index > _currentFormIndex ? 1 : -1;
+      _currentFormIndex = index;
+    });
+  }
+
+  void _toggleForm() => _switchForm(_isLogin ? 1 : 0);
+
+  void _unfocusAll() {
+    for (final node in [
+      loginPhoneFocus,
+      loginPasswordFocus,
+      registerPhoneFocus,
+      registerNameFocus,
+      registerPasswordFocus,
+      registerConfirmFocus,
+    ]) {
+      node.unfocus();
+    }
   }
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 
-  void _toggleForm() {
-    setState(() => showLogin = !showLogin);
-  }
-
+  // --- UI ---
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
     final strings = context.strings;
-    final media = MediaQuery.of(context);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      body: Stack(
-        children: [
-          _GradientBackground(controller: _logoController),
-          Center(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: media.size.width < 480
-                    ? 24
-                    : media.size.width * 0.2,
-                vertical: 48,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ScaleTransition(
-                    scale: Tween(begin: 0.95, end: 1.0).animate(
-                      CurvedAnimation(
-                        parent: _logoController,
-                        curve: const Interval(0, 0.3, curve: Curves.easeInOut),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 32),
-                        Hero(
-                          tag: 'app-logo',
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [
-                                  Theme.of(context).colorScheme.primary,
-                                  Theme.of(context).colorScheme.secondary,
-                                ],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.22),
-                                  blurRadius: 30,
-                                  offset: const Offset(0, 14),
-                                ),
+      extendBodyBehindAppBar: true,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = constraints.maxWidth.clamp(360.0, 720.0);
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: AppSpacing.xl),
+
+                      // ---- Header / Logo ----
+                      ScaleTransition(
+                        scale: _logoScale,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                theme.colorScheme.primary,
+                                theme.colorScheme.secondary,
                               ],
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.16,
+                                ),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
                             child: Icon(
                               Icons.local_taxi_rounded,
-                              color: Theme.of(context).colorScheme.onPrimary,
+                              color: theme.colorScheme.onPrimary,
                               size: 36,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        Text(
-                          strings.tr('authTitle'),
-                          style: Theme.of(context).textTheme.headlineMedium
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        strings.tr('authTitle'),
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        strings.tr('authSubtitle'),
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+
+                      // ---- Card with Forms ----
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: _FrostCard(
+                            padding: const EdgeInsets.all(AppSpacing.lg),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Toggle
+                                PillTabs(
+                                  tabs: [
+                                    strings.tr('loginTitle'),
+                                    strings.tr('registerTitle'),
+                                  ],
+                                  current: _currentFormIndex,
+                                  onChanged: (index) {
+                                    if (!loading) _switchForm(index);
+                                  },
+                                ),
+                                const SizedBox(height: AppSpacing.lg),
+
+                                AnimatedSize(
+                                  duration: AppDurations.medium,
+                                  curve: Curves.easeInOutCubic,
+                                  alignment: Alignment.topCenter,
+                                  clipBehavior: Clip.none,
+                                  child: AnimatedSwitcher(
+                                    duration: AppDurations.medium,
+                                    layoutBuilder: (currentChild, previous) {
+                                      return Stack(
+                                        clipBehavior: Clip.none,
+                                        alignment: Alignment.topCenter,
+                                        children: [
+                                          ...previous,
+                                          if (currentChild != null)
+                                            currentChild,
+                                        ],
+                                      );
+                                    },
+                                    transitionBuilder: (child, animation) {
+                                      final curved = CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeInOutCubic,
+                                      );
+                                      final isEntering =
+                                          animation.status !=
+                                          AnimationStatus.reverse;
+                                      final offsetTween = Tween<Offset>(
+                                        begin: isEntering
+                                            ? Offset(0.18 * _slideDirection, 0)
+                                            : Offset.zero,
+                                        end: isEntering
+                                            ? Offset.zero
+                                            : Offset(
+                                                -0.18 * _slideDirection,
+                                                0,
+                                              ),
+                                      );
+                                      final slideAnimation = curved.drive(
+                                        offsetTween,
+                                      );
+                                      return FadeTransition(
+                                        opacity: curved,
+                                        child: SlideTransition(
+                                          position: slideAnimation,
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                    child: KeyedSubtree(
+                                      key: ValueKey(_currentFormIndex),
+                                      child: _isLogin
+                                          ? _buildLoginForm(strings, theme)
+                                          : _buildRegisterForm(strings, theme),
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: AppSpacing.lg),
+                                Center(
+                                  child: TextButton(
+                                    onPressed: loading ? null : _toggleForm,
+                                    child: RichText(
+                                      text: TextSpan(
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                        children: [
+                                          TextSpan(
+                                            text: _isLogin
+                                                ? strings.tr('needAccount')
+                                                : strings.tr('haveAccount'),
+                                          ),
+                                          TextSpan(
+                                            text:
+                                                ' ${_isLogin ? strings.tr('registerNow') : strings.tr('loginInstead')}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.lg),
+
+                      // ---- Language chips footer ----
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        alignment: WrapAlignment.center,
+                        children: AppLocale.values.map((locale) {
+                          final selected = state.locale == locale.locale;
+                          final labelStyle = theme.textTheme.labelMedium
                               ?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: Theme.of(context).colorScheme.onPrimary,
-                              ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          strings.tr('authSubtitle'),
-                          style: Theme.of(context).textTheme.bodyLarge
-                              ?.copyWith(color: Colors.white70),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 32),
-                      ],
-                    ),
-                  ),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 450),
-                    transitionBuilder: (child, animation) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: Offset(showLogin ? 0.1 : -0.1, 0),
-                            end: Offset.zero,
-                          ).animate(animation),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: GlassCard(
-                      key: ValueKey(showLogin),
-                      margin: EdgeInsets.zero,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            showLogin
-                                ? strings.tr('loginTitle')
-                                : strings.tr('registerTitle'),
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 20),
-                          if (showLogin) ...[
-                            AppTextField(
-                              controller: loginPhoneCtrl,
-                              label: strings.tr('phoneNumber'),
-                              keyboardType: TextInputType.phone,
-                              prefixIcon: Icons.phone_rounded,
-                            ),
-                            const SizedBox(height: 16),
-                            AppTextField(
-                              controller: loginPasswordCtrl,
-                              label: strings.tr('password'),
-                              obscureText: !loginPasswordVisible,
-                              prefixIcon: Icons.lock_rounded,
-                              suffix: IconButton(
-                                icon: Icon(
-                                  loginPasswordVisible
-                                      ? Icons.visibility_off_rounded
-                                      : Icons.visibility_rounded,
+                                color: selected
+                                    ? theme.colorScheme.onPrimary
+                                    : theme.colorScheme.onSurface.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.2,
+                              );
+                          return ChoiceChip(
+                            label: Text(locale.label),
+                            selected: selected,
+                            showCheckmark: false,
+                            onSelected: (_) =>
+                                context.read<AppState>().switchLocale(locale),
+                            visualDensity: VisualDensity.compact,
+                            backgroundColor: theme.colorScheme.surface
+                                .withValues(
+                                  alpha: theme.brightness == Brightness.dark
+                                      ? 0.26
+                                      : 0.12,
                                 ),
-                                onPressed: () => setState(
-                                  () => loginPasswordVisible =
-                                      !loginPasswordVisible,
-                                ),
-                              ),
+                            selectedColor: theme.colorScheme.primary,
+                            side: BorderSide(
+                              color: selected
+                                  ? Colors.transparent
+                                  : theme.colorScheme.outline.withValues(
+                                      alpha: 0.16,
+                                    ),
                             ),
-                            const SizedBox(height: 12),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed: () => _showSnack(
-                                  strings.tr('passwordRecoveryMock'),
-                                ),
-                                child: Text(strings.tr('forgotPassword')),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            GradientButton(
-                              onPressed: loading ? null : _handleLogin,
-                              label: strings.tr('continue'),
-                              icon: Icons.arrow_forward_rounded,
-                              loading: loading,
-                            ),
-                          ] else ...[
-                            AppTextField(
-                              controller: registerNameCtrl,
-                              label: strings.tr('fullName'),
-                              keyboardType: TextInputType.name,
-                              prefixIcon: Icons.person_rounded,
-                            ),
-                            const SizedBox(height: 16),
-                            AppTextField(
-                              controller: registerPhoneCtrl,
-                              label: strings.tr('phoneNumber'),
-                              keyboardType: TextInputType.phone,
-                              prefixIcon: Icons.phone_rounded,
-                            ),
-                            const SizedBox(height: 16),
-                            AppTextField(
-                              controller: registerPasswordCtrl,
-                              label: strings.tr('password'),
-                              obscureText: !registerPasswordVisible,
-                              prefixIcon: Icons.lock_rounded,
-                              suffix: IconButton(
-                                icon: Icon(
-                                  registerPasswordVisible
-                                      ? Icons.visibility_off_rounded
-                                      : Icons.visibility_rounded,
-                                ),
-                                onPressed: () => setState(
-                                  () => registerPasswordVisible =
-                                      !registerPasswordVisible,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            AppTextField(
-                              controller: registerConfirmCtrl,
-                              label: strings.tr('confirmPassword'),
-                              obscureText: !registerConfirmVisible,
-                              prefixIcon: Icons.lock_outline_rounded,
-                              suffix: IconButton(
-                                icon: Icon(
-                                  registerConfirmVisible
-                                      ? Icons.visibility_off_rounded
-                                      : Icons.visibility_rounded,
-                                ),
-                                onPressed: () => setState(
-                                  () => registerConfirmVisible =
-                                      !registerConfirmVisible,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            GradientButton(
-                              onPressed: loading ? null : _handleRegister,
-                              label: strings.tr('createAccount'),
-                              icon: Icons.check_circle_rounded,
-                              loading: loading,
-                            ),
-                          ],
-                        ],
+                            labelStyle: labelStyle,
+                          );
+                        }).toList(),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  TextButton(
-                    onPressed: loading ? null : _toggleForm,
-                    child: RichText(
-                      text: TextSpan(
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodyMedium?.copyWith(color: Colors.white),
-                        children: [
-                          TextSpan(
-                            text: showLogin
-                                ? strings.tr('needAccount')
-                                : strings.tr('haveAccount'),
-                          ),
-                          TextSpan(
-                            text: showLogin
-                                ? strings.tr('registerNow')
-                                : strings.tr('loginInstead'),
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: const _LanguageSelector(),
-    );
-  }
-}
-
-class _GradientBackground extends StatelessWidget {
-  const _GradientBackground({required this.controller});
-
-  final AnimationController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, child) {
-        final animationValue = controller.value;
-        final rotation = animationValue * 2 * 3.1415;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFF0F172A),
-                    Theme.of(context).colorScheme.primary,
-                    const Color(0xFF111B2E),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            ),
-            Positioned(
-              top: -120,
-              right: -120,
-              child: Transform.rotate(
-                angle: rotation,
-                child: _BlurCircle(
-                  size: 280,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.12),
-                    Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.2),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -100,
-              left: -40,
-              child: Transform.rotate(
-                angle: -rotation,
-                child: _BlurCircle(
-                  size: 240,
-                  colors: [
-                    Theme.of(
-                      context,
-                    ).colorScheme.secondary.withValues(alpha: 0.18),
-                    Colors.white.withValues(alpha: 0.05),
-                  ],
-                ),
-              ),
-            ),
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                child: const SizedBox.shrink(),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _BlurCircle extends StatelessWidget {
-  const _BlurCircle({required this.size, required this.colors});
-
-  final double size;
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: colors),
-      ),
-    );
-  }
-}
-
-class _LanguageSelector extends StatelessWidget {
-  const _LanguageSelector();
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: AppLocale.values.map((locale) {
-            final selected = state.locale == locale.locale;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: Colors.white.withValues(
-                      alpha: selected ? 0.4 : 0.18,
-                    ),
-                  ),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(30),
-                  onTap: () => context.read<AppState>().switchLocale(locale),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    child: Text(
-                      locale.label,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: selected ? Colors.white : Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    ],
                   ),
                 ),
               ),
             );
-          }).toList(),
+          },
         ),
       ),
+    );
+  }
+
+  // --- Widgets ---
+  Widget _buildLoginForm(AppLocalizations strings, ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppTextField(
+          key: const ValueKey('loginPhoneField'),
+          controller: loginPhoneCtrl,
+          label: strings.tr('phoneNumber'),
+          focusNode: loginPhoneFocus,
+          keyboardType: TextInputType.phone,
+          prefixIcon: Icons.phone_rounded,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          key: const ValueKey('loginPasswordField'),
+          controller: loginPasswordCtrl,
+          label: strings.tr('password'),
+          obscureText: !loginPasswordVisible,
+          focusNode: loginPasswordFocus,
+          prefixIcon: Icons.lock_rounded,
+          suffix: IconButton(
+            icon: Icon(
+              loginPasswordVisible
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+            ),
+            onPressed: () =>
+                setState(() => loginPasswordVisible = !loginPasswordVisible),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => _showSnack(strings.tr('passwordRecoveryMock')),
+            child: Text(strings.tr('forgotPassword')),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        GradientButton(
+          onPressed: loading ? null : _handleLogin,
+          label: strings.tr('loginTitle'),
+          icon: Icons.login_rounded,
+          loading: loading,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRegisterForm(AppLocalizations strings, ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppTextField(
+          key: const ValueKey('registerPhoneField'),
+          controller: registerPhoneCtrl,
+          label: strings.tr('phoneNumber'),
+          focusNode: registerPhoneFocus,
+          keyboardType: TextInputType.phone,
+          prefixIcon: Icons.phone_rounded,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          key: const ValueKey('registerNameField'),
+          controller: registerNameCtrl,
+          label: strings.tr('fullName'),
+          focusNode: registerNameFocus,
+          prefixIcon: Icons.person_rounded,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          key: const ValueKey('registerPasswordField'),
+          controller: registerPasswordCtrl,
+          label: strings.tr('password'),
+          obscureText: !registerPasswordVisible,
+          focusNode: registerPasswordFocus,
+          prefixIcon: Icons.lock_rounded,
+          suffix: IconButton(
+            icon: Icon(
+              registerPasswordVisible
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+            ),
+            onPressed: () => setState(
+              () => registerPasswordVisible = !registerPasswordVisible,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          key: const ValueKey('registerConfirmField'),
+          controller: registerConfirmCtrl,
+          label: strings.tr('confirmPassword'),
+          obscureText: !registerConfirmVisible,
+          focusNode: registerConfirmFocus,
+          prefixIcon: Icons.lock_reset_rounded,
+          suffix: IconButton(
+            icon: Icon(
+              registerConfirmVisible
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+            ),
+            onPressed: () => setState(
+              () => registerConfirmVisible = !registerConfirmVisible,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        GradientButton(
+          onPressed: loading ? null : _handleRegister,
+          label: strings.tr('createAccount'),
+          icon: Icons.person_add_alt_1_rounded,
+          loading: loading,
+        ),
+      ],
+    );
+  }
+}
+
+/// Lightweight self-contained glass card (no dependency on your GlassCard)
+class _FrostCard extends StatelessWidget {
+  const _FrostCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(AppSpacing.md),
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const radius = BorderRadius.all(Radius.circular(16));
+    final bg = theme.colorScheme.surface.withValues(alpha: 0.6);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: radius,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: bg, borderRadius: radius),
+              ),
+            ),
+          ),
+        ),
+        Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            color: Colors.transparent,
+            border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.12),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ],
     );
   }
 }

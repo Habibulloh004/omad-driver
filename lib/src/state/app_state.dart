@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../api/auth_api.dart';
 import '../localization/app_localizations.dart';
 import '../mock/mock_data.dart';
 import '../models/app_notification.dart';
@@ -9,15 +10,17 @@ import '../models/order.dart';
 import '../models/user.dart';
 
 class AppState extends ChangeNotifier {
-  AppState() {
+  AppState({AuthApi? authApi}) : _authApi = authApi ?? AuthApi() {
     _currentUser = MockData.defaultUser();
     _orders = MockData.mockOrders();
     _notifications = MockData.notifications();
   }
 
+  final AuthApi _authApi;
   late AppUser _currentUser;
   late List<AppOrder> _orders;
   late List<AppNotification> _notifications;
+  String? _authToken;
 
   ThemeMode _themeMode = ThemeMode.light;
   AppLocale _locale = AppLocale.uzLatin;
@@ -29,6 +32,7 @@ class AppState extends ChangeNotifier {
   AppUser get currentUser => _currentUser;
   ThemeMode get themeMode => _themeMode;
   Locale get locale => localization.locale;
+  String? get authToken => _authToken;
 
   bool get isAuthenticated => _isAuthenticated;
   bool get isDriverMode => _isDriverMode && _currentUser.isDriver;
@@ -58,24 +62,44 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void login({required String phone, required String password}) {
-    _isAuthenticated = true;
-    notifyListeners();
+  Future<void> login({required String phone, required String password}) async {
+    final session = await _authApi.login(
+      phoneNumber: phone.trim(),
+      password: password,
+    );
+    _applyAuthSession(session);
   }
 
-  void register({
+  Future<void> register({
     required String phone,
     required String fullName,
     required String password,
-  }) {
-    _currentUser = _currentUser.copyWith(fullName: fullName);
+    required String confirmPassword,
+  }) async {
+    final session = await _authApi.register(
+      phoneNumber: phone.trim(),
+      password: password,
+      confirmPassword: confirmPassword,
+      fullName: fullName.trim(),
+    );
+    _applyAuthSession(session);
+  }
+
+  void _applyAuthSession(AuthSession session) {
+    _authToken = session.token;
+    _currentUser = session.user;
     _isAuthenticated = true;
+    _isDriverMode = session.user.isDriver;
+    _driverApplicationSubmitted = false;
     notifyListeners();
   }
 
   void logout() {
+    _authToken = null;
     _isAuthenticated = false;
     _isDriverMode = false;
+    _driverApplicationSubmitted = false;
+    _currentUser = MockData.defaultUser();
     notifyListeners();
   }
 
@@ -326,5 +350,11 @@ class AppState extends ChangeNotifier {
     final random = Random();
     final code = random.nextInt(900) + 100;
     return 'ORD-${DateTime.now().year}-$code';
+  }
+
+  @override
+  void dispose() {
+    _authApi.dispose();
+    super.dispose();
   }
 }

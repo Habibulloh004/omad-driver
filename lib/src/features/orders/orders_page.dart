@@ -16,16 +16,33 @@ class OrdersPage extends StatefulWidget {
   State<OrdersPage> createState() => _OrdersPageState();
 }
 
-class _OrdersPageState extends State<OrdersPage> {
+class _OrdersPageState extends State<OrdersPage>
+    with AutomaticKeepAliveClientMixin<OrdersPage> {
   int currentTab = 0;
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: currentTab);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncCurrentTabWithController();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final state = context.watch<AppState>();
     final strings = context.strings;
     final activeOrders = state.activeOrders;
     final historyOrders = state.historyOrders;
-    final data = currentTab == 0 ? activeOrders : historyOrders;
     final mediaPadding = MediaQuery.of(context).padding;
     final bottomSpacing =
         mediaPadding.bottom + AppSpacing.xxl * 2 + AppSpacing.lg;
@@ -51,65 +68,64 @@ class _OrdersPageState extends State<OrdersPage> {
           PillTabs(
             tabs: [strings.tr('activeTab'), strings.tr('historyTab')],
             current: currentTab,
-            onChanged: (index) => setState(() => currentTab = index),
+            onChanged: _animateToTab,
           ),
           const SizedBox(height: AppSpacing.md),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: AppDurations.medium,
-              transitionBuilder: (child, animation) {
-                final curved = CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                  reverseCurve: Curves.easeInCubic,
-                );
-                return ClipRect(
-                  child: FadeTransition(
-                    opacity: curved,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0.05, 0),
-                        end: Offset.zero,
-                      ).animate(curved),
-                      child: child,
-                    ),
-                  ),
+            child: PageView.builder(
+              controller: _pageController,
+              physics: const BouncingScrollPhysics(),
+              clipBehavior: Clip.none,
+              onPageChanged: (index) {
+                if (currentTab == index) return;
+                setState(() => currentTab = index);
+              },
+              itemCount: 2,
+              itemBuilder: (context, index) {
+                final isActiveTab = index == 0;
+                final orders = isActiveTab ? activeOrders : historyOrders;
+                final emptyText = isActiveTab
+                    ? strings.tr('noActiveOrders')
+                    : strings.tr('noHistory');
+
+                final child = orders.isEmpty
+                    ? Center(
+                        key: ValueKey('empty-$index'),
+                        child: Text(
+                          emptyText,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : ListView.separated(
+                        key: PageStorageKey('orders-$index'),
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.only(
+                          top: AppSpacing.sm,
+                          bottom: bottomSpacing,
+                        ),
+                        itemCount: orders.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: AppSpacing.sm),
+                        itemBuilder: (context, listIndex) {
+                          final order = orders[listIndex];
+                          return _OrderCard(
+                            order: order,
+                            onTap: () => _openDetails(context, order),
+                          );
+                        },
+                      );
+
+                return _OrdersParallaxPage(
+                  controller: _pageController,
+                  index: index,
+                  child: child,
                 );
               },
-              child: data.isEmpty
-                  ? Center(
-                      key: ValueKey('empty-$currentTab'),
-                      child: Text(
-                        currentTab == 0
-                            ? strings.tr('noActiveOrders')
-                            : strings.tr('noHistory'),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                  : ListView.separated(
-                      key: ValueKey('list-$currentTab'),
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.only(
-                        top: AppSpacing.sm,
-                        bottom: bottomSpacing,
-                      ),
-                      itemCount: data.length,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(height: AppSpacing.sm),
-                      itemBuilder: (context, index) {
-                        final order = data[index];
-                        return _OrderCard(
-                          order: order,
-                          onTap: () => _openDetails(context, order),
-                        );
-                      },
-                    ),
             ),
           ),
         ],
@@ -279,6 +295,61 @@ class _OrdersPageState extends State<OrdersPage> {
           ),
         );
       },
+    );
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+
+  void _animateToTab(int index) {
+    if (index == currentTab) return;
+    setState(() => currentTab = index);
+    _pageController.animateToPage(
+      index,
+      duration: AppDurations.long,
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  void _syncCurrentTabWithController() {
+    if (!mounted || !_pageController.hasClients) return;
+    final page = _pageController.page ?? _pageController.initialPage.toDouble();
+    final index = page.round();
+    if (index != currentTab) {
+      setState(() => currentTab = index);
+    }
+  }
+}
+
+class _OrdersParallaxPage extends StatelessWidget {
+  const _OrdersParallaxPage({
+    required this.controller,
+    required this.index,
+    required this.child,
+  });
+
+  final PageController controller;
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, widget) {
+        final hasClients = controller.hasClients;
+        final page = hasClients
+            ? controller.page ?? controller.initialPage.toDouble()
+            : controller.initialPage.toDouble();
+        final delta = page - index;
+        final translateX = -delta * 28;
+
+        return Transform.translate(
+          offset: Offset(translateX, 0),
+          child: widget,
+        );
+      },
+      child: child,
     );
   }
 }

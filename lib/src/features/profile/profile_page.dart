@@ -34,11 +34,22 @@ class ProfilePage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            strings.tr('profileTitle'),
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  strings.tr('profile'),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => context.read<AppState>().logout(),
+                icon: const Icon(Icons.logout_rounded),
+                tooltip: strings.tr('logout'),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           GlassCard(
@@ -127,6 +138,8 @@ class ProfilePage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sm),
                 Wrap(
                   spacing: AppSpacing.sm,
+                  alignment: WrapAlignment.center,
+                  runAlignment: WrapAlignment.center,
                   runSpacing: AppSpacing.xs,
                   children: AppLocale.values.map((locale) {
                     final selected = state.locale == locale.locale;
@@ -187,24 +200,6 @@ class ProfilePage extends StatelessWidget {
                   ),
                 ],
               ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          GlassCard(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: FilledButton.icon(
-              onPressed: () => context.read<AppState>().logout(),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                  vertical: AppSpacing.sm,
-                ),
-                shape: RoundedRectangleBorder(borderRadius: AppRadii.rounded),
-              ),
-              icon: const Icon(Icons.logout_rounded),
-              label: Text(strings.tr('logout')),
             ),
           ),
         ],

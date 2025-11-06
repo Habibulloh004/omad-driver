@@ -5,6 +5,7 @@ class AppTextField extends StatelessWidget {
     super.key,
     required this.controller,
     required this.label,
+    this.focusNode,
     this.keyboardType,
     this.obscureText = false,
     this.suffix,
@@ -17,6 +18,7 @@ class AppTextField extends StatelessWidget {
 
   final TextEditingController controller;
   final String label;
+  final FocusNode? focusNode;
   final TextInputType? keyboardType;
   final bool obscureText;
   final Widget? suffix;
@@ -31,6 +33,7 @@ class AppTextField extends StatelessWidget {
     final theme = Theme.of(context);
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: keyboardType,
       obscureText: obscureText,
       onTap: onTap,

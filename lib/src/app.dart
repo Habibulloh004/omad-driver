@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'core/app_theme.dart';
@@ -18,12 +17,14 @@ class MobileTaxiApp extends StatelessWidget {
       providers: [ChangeNotifierProvider(create: (_) => AppState())],
       child: Consumer<AppState>(
         builder: (context, state, _) {
+          final lightTextTheme = _urbanistTextTheme(Brightness.light);
+          final darkTextTheme = _urbanistTextTheme(Brightness.dark);
           return MaterialApp(
             title: 'Mobile Taxi',
             debugShowCheckedModeBanner: false,
             themeMode: state.themeMode,
-            theme: buildLightTheme(GoogleFonts.urbanistTextTheme()),
-            darkTheme: buildDarkTheme(GoogleFonts.urbanistTextTheme()),
+            theme: buildLightTheme(lightTextTheme),
+            darkTheme: buildDarkTheme(darkTextTheme),
             themeAnimationDuration: AppDurations.long,
             themeAnimationCurve: Curves.easeInOutCubic,
             locale: state.locale,
@@ -40,4 +41,12 @@ class MobileTaxiApp extends StatelessWidget {
       ),
     );
   }
+}
+
+TextTheme _urbanistTextTheme(Brightness brightness) {
+  final typography = Typography.material2021();
+  final base = brightness == Brightness.dark
+      ? typography.white
+      : typography.black;
+  return base.apply(fontFamily: 'Urbanist');
 }

@@ -53,11 +53,21 @@ class AppShadows {
     required Color baseColor,
     required bool isDark,
   }) {
-    final primary = baseColor.withValues(alpha: isDark ? 0.24 : 0.18);
-    final ambient = Colors.black.withValues(alpha: isDark ? 0.3 : 0.12);
+    final primary = baseColor.withValues(alpha: isDark ? 0.12 : 0.08);
+    final ambient = Colors.black.withValues(alpha: isDark ? 0.12 : 0.05);
     return [
-      BoxShadow(color: ambient, blurRadius: 28, offset: const Offset(0, 18)),
-      BoxShadow(color: primary, blurRadius: 36, offset: const Offset(0, 12)),
+      BoxShadow(
+        color: ambient,
+        blurRadius: 12,
+        offset: const Offset(0, 8),
+        spreadRadius: 0.5,
+      ),
+      BoxShadow(
+        color: primary,
+        blurRadius: 16,
+        offset: const Offset(0, 4),
+        spreadRadius: 0.5,
+      ),
     ];
   }
 }

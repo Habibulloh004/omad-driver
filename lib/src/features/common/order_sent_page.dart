@@ -76,9 +76,9 @@ class _OrderSentPageState extends State<OrderSentPage>
                     BoxShadow(
                       color: Theme.of(
                         context,
-                      ).colorScheme.primary.withValues(alpha: 0.2),
-                      blurRadius: 30,
-                      spreadRadius: 10,
+                      ).colorScheme.primary.withValues(alpha: 0.14),
+                      blurRadius: 18,
+                      spreadRadius: 6,
                     ),
                   ],
                 ),

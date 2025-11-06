@@ -19,11 +19,19 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell>
+    with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
   late final List<Widget> _tabs;
   late final PageController _pageController;
-  double _pageValue = 0;
+  late final AnimationController _jumpController;
+  late final Animation<double> _jumpFade;
+  late final Animation<double> _jumpScale;
+  static const AlwaysStoppedAnimation<double> _unitAnimation =
+      AlwaysStoppedAnimation<double>(1);
+  bool _isDirectJump = false;
+  bool _hasJumpedDuringTransition = false;
+  int? _pendingJumpIndex;
 
   @override
   void initState() {
@@ -47,13 +55,66 @@ class _MainShellState extends State<MainShell> {
       ),
     ];
     _pageController = PageController(initialPage: _currentIndex);
-    _pageValue = _currentIndex.toDouble();
-    _pageController.addListener(_onPageChanged);
+    _jumpController = AnimationController(
+      vsync: this,
+      duration: AppDurations.medium,
+    );
+    _jumpFade = _jumpController.drive(
+      TweenSequence<double>(
+        [
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 1, end: 0).chain(
+              CurveTween(curve: Curves.easeInOutCubic),
+            ),
+            weight: 50,
+          ),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 0, end: 1).chain(
+              CurveTween(curve: Curves.easeInOutCubic),
+            ),
+            weight: 50,
+          ),
+        ],
+      ),
+    );
+    _jumpScale = _jumpController.drive(
+      TweenSequence<double>(
+        [
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 1, end: 0.96).chain(
+              CurveTween(curve: Curves.easeInOutCubic),
+            ),
+            weight: 50,
+          ),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 0.96, end: 1).chain(
+              CurveTween(curve: Curves.easeOutBack),
+            ),
+            weight: 50,
+          ),
+        ],
+      ),
+    );
+    _jumpController.addListener(_handleJumpTick);
+    _jumpController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _jumpController.reset();
+        if (mounted) {
+          setState(() {
+            _isDirectJump = false;
+          });
+        } else {
+          _isDirectJump = false;
+        }
+        _hasJumpedDuringTransition = false;
+      }
+    });
   }
 
   @override
   void dispose() {
-    _pageController.removeListener(_onPageChanged);
+    _jumpController.removeListener(_handleJumpTick);
+    _jumpController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -64,25 +125,33 @@ class _MainShellState extends State<MainShell> {
 
     return Scaffold(
       extendBody: true,
-      body: PageView.builder(
-        controller: _pageController,
-        physics: const BouncingScrollPhysics(),
-        itemCount: _tabs.length,
-        onPageChanged: (index) {
-          if (_currentIndex == index) return;
-          setState(() => _currentIndex = index);
-        },
-        itemBuilder: (context, index) {
-          return _ParallaxPage(
-            controller: _pageController,
-            index: index,
-            child: _tabs[index],
-          );
-        },
+      body: IgnorePointer(
+        ignoring: _isDirectJump,
+        child: FadeTransition(
+          opacity: _isDirectJump ? _jumpFade : _unitAnimation,
+          child: ScaleTransition(
+            scale: _isDirectJump ? _jumpScale : _unitAnimation,
+            child: PageView.builder(
+              controller: _pageController,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _tabs.length,
+              onPageChanged: (index) {
+                if (_currentIndex == index) return;
+                setState(() => _currentIndex = index);
+              },
+              itemBuilder: (context, index) {
+                return _ParallaxPage(
+                  controller: _pageController,
+                  index: index,
+                  child: _tabs[index],
+                );
+              },
+            ),
+          ),
+        ),
       ),
       bottomNavigationBar: _FrostedNavBar(
         currentIndex: _currentIndex,
-        pageValue: _pageValue,
         onChanged: _animateToPage,
         items: [
           _NavItem(icon: Icons.home_rounded, label: strings.tr('home')),
@@ -96,22 +165,46 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  void _onPageChanged() {
-    final value = _pageController.hasClients
-        ? _pageController.page ?? _currentIndex.toDouble()
-        : _currentIndex.toDouble();
-    if (value == _pageValue) return;
-    setState(() => _pageValue = value);
-  }
-
   void _animateToPage(int index) {
     if (_currentIndex == index) return;
-    _pageController.animateToPage(
-      index,
-      duration: AppDurations.long,
-      curve: Curves.easeInOutCubic,
-    );
-    setState(() => _currentIndex = index);
+    final currentPage = _pageController.hasClients
+        ? (_pageController.page ?? _currentIndex.toDouble())
+        : _currentIndex.toDouble();
+    final isAdjacent = (currentPage - index).abs() <= 1;
+
+    if (isAdjacent) {
+      _pageController.animateToPage(
+        index,
+        duration: AppDurations.long,
+        curve: Curves.easeInOutCubic,
+      );
+      setState(() => _currentIndex = index);
+      return;
+    }
+
+    if (_isDirectJump) {
+      _jumpController.stop();
+      _jumpController.reset();
+      _hasJumpedDuringTransition = false;
+    }
+    _pendingJumpIndex = index;
+    _hasJumpedDuringTransition = false;
+    _jumpController.forward(from: 0);
+    setState(() {
+      _currentIndex = index;
+      _isDirectJump = true;
+    });
+  }
+
+  void _handleJumpTick() {
+    if (!_isDirectJump || _pendingJumpIndex == null) return;
+    if (_hasJumpedDuringTransition) return;
+    if (_jumpController.value < 0.5) return;
+
+    final target = _pendingJumpIndex!;
+    _hasJumpedDuringTransition = true;
+    _pendingJumpIndex = null;
+    _pageController.jumpToPage(target);
   }
 
   Future<void> _openPage(Widget page) async {
@@ -148,13 +241,11 @@ class _FrostedNavBar extends StatelessWidget {
   const _FrostedNavBar({
     required this.items,
     required this.currentIndex,
-    required this.pageValue,
     required this.onChanged,
   });
 
   final List<_NavItem> items;
   final int currentIndex;
-  final double pageValue;
   final ValueChanged<int> onChanged;
 
   @override
@@ -163,6 +254,7 @@ class _FrostedNavBar extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final backgroundAlpha = isDark ? 0.32 : 0.68;
     final borderAlpha = isDark ? 0.38 : 0.18;
+    final highlightColor = theme.colorScheme.primary;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -200,30 +292,26 @@ class _FrostedNavBar extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final itemWidth = constraints.maxWidth / items.length;
-                final indicatorWidth = itemWidth * 0.42;
-                final clampedPage = pageValue.clamp(
-                  0.0,
-                  (items.length - 1).toDouble(),
+                final highlightWidth = itemWidth;
+                final highlightLeft = currentIndex * itemWidth;
+                final highlightGradient = LinearGradient(
+                  colors: [highlightColor, theme.colorScheme.secondary],
                 );
-                final indicatorLeft =
-                    clampedPage * itemWidth + (itemWidth - indicatorWidth) / 2;
 
                 return Stack(
-                  alignment: Alignment.center,
+                  alignment: Alignment.centerLeft,
                   children: [
                     AnimatedPositioned(
                       duration: AppDurations.medium,
                       curve: Curves.easeInOutCubic,
-                      left: indicatorLeft,
-                      bottom: AppSpacing.xs,
-                      width: indicatorWidth,
-                      height: 4,
+                      left: highlightLeft,
+                      top: 0,
+                      bottom: 0,
+                      width: highlightWidth,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF7367F0), Color(0xFFA29BFE)],
-                          ),
+                          borderRadius: AppRadii.pillRadius,
+                          gradient: highlightGradient,
                         ),
                       ),
                     ),
@@ -233,7 +321,7 @@ class _FrostedNavBar extends StatelessWidget {
                           Expanded(
                             child: _NavButton(
                               item: items[i],
-                              progress: _selectionProgress(pageValue, i),
+                              selected: i == currentIndex,
                               onTap: () => onChanged(i),
                             ),
                           ),
@@ -248,14 +336,6 @@ class _FrostedNavBar extends StatelessWidget {
       ),
     );
   }
-
-  double _selectionProgress(double page, int index) {
-    final distance = (page - index).abs();
-    if (distance >= 1) {
-      return index == currentIndex ? 1 : 0;
-    }
-    return 1 - distance;
-  }
 }
 
 class _NavItem {
@@ -268,65 +348,64 @@ class _NavItem {
 class _NavButton extends StatelessWidget {
   const _NavButton({
     required this.item,
-    required this.progress,
+    required this.selected,
     required this.onTap,
   });
 
   final _NavItem item;
-  final double progress;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final baseColor = theme.colorScheme.onSurface.withValues(alpha: 0.55);
-    final activeBackground = theme.colorScheme.primary.withValues(alpha: 0.18);
-    final background = Color.lerp(
-      Colors.transparent,
-      activeBackground,
-      Curves.easeInOutCubic.transform(progress.clamp(0, 1)),
-    );
-    final iconColor = Color.lerp(
-      baseColor,
-      theme.colorScheme.onPrimary,
-      progress.clamp(0, 1),
-    );
-    final textColor = Color.lerp(
-      theme.colorScheme.onSurfaceVariant,
-      theme.colorScheme.onPrimary,
-      progress.clamp(0, 1),
-    );
+    final baseIcon = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.84);
+    final baseText = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.82);
+    final activeForeground = theme.colorScheme.onPrimary;
 
-    return AnimatedContainer(
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: selected ? 1 : 0),
       duration: AppDurations.medium,
       curve: Curves.easeInOutCubic,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: AppRadii.rounded,
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadii.rounded,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(item.icon, color: iconColor),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                item.label,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelMedium?.copyWith(color: textColor),
-              ),
-            ],
+      builder: (context, value, child) {
+        final iconColor = Color.lerp(baseIcon, activeForeground, value)!;
+        final textColor = Color.lerp(baseText, activeForeground, value)!;
+
+        return AnimatedContainer(
+          duration: AppDurations.medium,
+          curve: Curves.easeInOutCubic,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm - 2,
           ),
-        ),
-      ),
+          decoration: const BoxDecoration(borderRadius: AppRadii.pillRadius),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: AppRadii.pillRadius,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(item.icon, color: iconColor, size: 24),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    item.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: textColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

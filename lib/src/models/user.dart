@@ -10,6 +10,32 @@ class AppUser {
     this.balance = 0,
   });
 
+  factory AppUser.fromJson(Map<String, dynamic> json) {
+    final dynamic roleValue = json['role'];
+    final dynamic avatarValue = json['avatar'];
+    final dynamic ratingValue = json['rating'];
+    final dynamic balanceValue =
+        json['balance'] ?? json['wallet_balance'] ?? json['driver_balance'];
+
+    final role = roleValue == null ? '' : roleValue.toString().toLowerCase();
+    final driverStatus = json['driver_status'] == null
+        ? ''
+        : json['driver_status'].toString().toLowerCase();
+    final isDriver = role == 'driver';
+    final isApproved = driverStatus == 'approved';
+
+    return AppUser(
+      id: (json['id'] ?? '').toString(),
+      fullName: (json['name'] ?? json['full_name'] ?? '').toString(),
+      phoneNumber: (json['phone_number'] ?? '').toString(),
+      avatarUrl: avatarValue == null ? '' : avatarValue.toString(),
+      rating: ratingValue is num ? ratingValue.toDouble() : 0,
+      isDriver: isDriver,
+      driverApproved: isApproved,
+      balance: balanceValue is num ? balanceValue.toDouble() : 0,
+    );
+  }
+
   final String id;
   final String fullName;
   final String phoneNumber;

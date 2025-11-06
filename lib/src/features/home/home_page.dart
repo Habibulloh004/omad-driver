@@ -53,13 +53,22 @@ class HomePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      strings.tr('homeGreeting'),
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            strings.tr('homeGreeting'),
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        _NotificationButton(onTap: onOpenNotifications),
+                      ],
                     ),
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.md),
                     GlassCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,8 +141,8 @@ class HomePage extends StatelessWidget {
                           const SizedBox(height: AppSpacing.lg),
                           LayoutBuilder(
                             builder: (context, constraints) {
-                              const double horizontalGap = AppSpacing.md;
-                              const double verticalGap = AppSpacing.sm;
+                              const double horizontalGap = AppSpacing.lg;
+                              const double verticalGap = AppSpacing.md;
                               final taxiButton = GradientButton(
                                 onPressed: onOrderTaxi,
                                 label: strings.tr('orderTaxi'),
@@ -234,17 +243,6 @@ class HomePage extends StatelessWidget {
             ),
           ],
         ),
-        Positioned(
-          bottom: AppSpacing.lg + mediaPadding.bottom,
-          right: AppSpacing.md + mediaPadding.right,
-          child: FloatingActionButton.extended(
-            heroTag: 'notifications-fab',
-            backgroundColor: theme.colorScheme.primary,
-            icon: const Icon(Icons.notifications_active_rounded),
-            label: Text(strings.tr('notifications')),
-            onPressed: onOpenNotifications,
-          ),
-        ),
       ],
     );
   }
@@ -309,6 +307,50 @@ class HomePage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _NotificationButton extends StatelessWidget {
+  const _NotificationButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final gradient = LinearGradient(
+      colors: [
+        theme.colorScheme.primary,
+        theme.colorScheme.secondary,
+      ],
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: AppRadii.buttonRadius,
+        boxShadow: AppShadows.soft(
+          baseColor: theme.colorScheme.primary,
+          isDark: theme.brightness == Brightness.dark,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: AppRadii.buttonRadius,
+          onTap: onTap,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Icon(
+              Icons.notifications_active_rounded,
+              color: theme.colorScheme.onPrimary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -403,7 +445,7 @@ class _OrderHighlightCard extends StatelessWidget {
                   color: theme.colorScheme.primary,
                   size: 20,
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     '${order.fromRegion}, ${order.fromDistrict}',
@@ -425,7 +467,7 @@ class _OrderHighlightCard extends StatelessWidget {
                   color: theme.colorScheme.secondary,
                   size: 20,
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     '${order.toRegion}, ${order.toDistrict}',

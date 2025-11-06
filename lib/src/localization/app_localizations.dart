@@ -51,6 +51,8 @@ class AppLocalizations {
       'confirmPassword': 'Parolni tasdiqlang',
       'createAccount': 'Hisob yaratish',
       'passwordMismatch': 'Parollar mos kelmadi',
+      'unexpectedError':
+          'Kutilmagan xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.',
       'needAccount': 'Hisobingiz yo‘qmi? ',
       'registerNow': 'Ro‘yxatdan o‘ting',
       'haveAccount': 'Allaqachon hisobingiz bormi? ',
@@ -198,6 +200,8 @@ class AppLocalizations {
       'confirmPassword': 'Паролни тасдиқланг',
       'createAccount': 'Аккаунт яратиш',
       'passwordMismatch': 'Пароллар мос келмади',
+      'unexpectedError':
+          'Кутилмаган хатолик юз берди. Илтимос, қайта уриниб кўринг.',
       'needAccount': 'Аккаунтингиз йўқми? ',
       'registerNow': 'Рўйхатдан ўтинг',
       'haveAccount': 'Аккаунтингиз борми? ',
@@ -343,6 +347,7 @@ class AppLocalizations {
       'confirmPassword': 'Подтвердите пароль',
       'createAccount': 'Создать аккаунт',
       'passwordMismatch': 'Пароли не совпадают',
+      'unexpectedError': 'Произошла непредвиденная ошибка. Попробуйте ещё раз.',
       'needAccount': 'Нет аккаунта? ',
       'registerNow': 'Зарегистрируйтесь',
       'haveAccount': 'Уже есть аккаунт? ',

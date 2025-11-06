@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/design_tokens.dart';
 
-class GradientButton extends StatelessWidget {
+class GradientButton extends StatefulWidget {
   const GradientButton({
     super.key,
     required this.onPressed,
@@ -17,53 +17,99 @@ class GradientButton extends StatelessWidget {
   final bool loading;
 
   @override
+  State<GradientButton> createState() => _GradientButtonState();
+}
+
+class _GradientButtonState extends State<GradientButton> {
+  bool _pressed = false;
+
+  void _handleHighlightChanged(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final gradient = const LinearGradient(
+    final isDark = theme.brightness == Brightness.dark;
+    final primary = theme.colorScheme.primary;
+    final secondary = theme.colorScheme.secondary;
+    final gradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF7367F0), Color(0xFFA29BFE)],
-      stops: [0, 1],
+      colors: [
+        primary,
+        Color.lerp(primary, secondary, 0.35)!,
+      ],
     );
-    final isDark = theme.brightness == Brightness.dark;
 
     return AnimatedOpacity(
       duration: AppDurations.medium,
-      opacity: onPressed == null ? 0.5 : 1.0,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: AppRadii.buttonRadius,
-          boxShadow: AppShadows.soft(
-            baseColor: theme.colorScheme.primary,
-            isDark: isDark,
-          ),
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: loading ? null : onPressed,
+      curve: Curves.easeOutCubic,
+      opacity: widget.onPressed == null ? 0.45 : 1.0,
+      child: AnimatedScale(
+        duration: AppDurations.short,
+        curve: Curves.easeOutCubic,
+        scale: _pressed ? 0.97 : 1,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: gradient,
             borderRadius: AppRadii.buttonRadius,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xl,
-                vertical: AppSpacing.sm,
-              ),
-              child: Center(
-                child: AnimatedSwitcher(
-                  duration: AppDurations.medium,
-                  child: loading
-                      ? SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation(
-                              theme.colorScheme.onPrimary,
+            boxShadow: AppShadows.soft(
+              baseColor: primary,
+              isDark: isDark,
+            ),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: widget.loading ? null : widget.onPressed,
+              onHighlightChanged: _handleHighlightChanged,
+              borderRadius: AppRadii.buttonRadius,
+              splashColor: theme.colorScheme.onPrimary.withValues(alpha: 0.16),
+              highlightColor: primary.withValues(alpha: isDark ? 0.28 : 0.18),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xl,
+                  vertical: AppSpacing.md,
+                ),
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: AppDurations.medium,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.96, end: 1).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
                             ),
                           ),
-                        )
-                      : _ButtonContent(label: label, icon: icon),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: widget.loading
+                        ? SizedBox(
+                            key: const ValueKey('loading'),
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              valueColor: AlwaysStoppedAnimation(
+                                theme.colorScheme.onPrimary,
+                              ),
+                            ),
+                          )
+                        : _ButtonContent(
+                            key: const ValueKey('content'),
+                            label: widget.label,
+                            icon: widget.icon,
+                          ),
+                  ),
                 ),
               ),
             ),
@@ -75,7 +121,7 @@ class GradientButton extends StatelessWidget {
 }
 
 class _ButtonContent extends StatelessWidget {
-  const _ButtonContent({required this.label, this.icon});
+  const _ButtonContent({super.key, required this.label, this.icon});
 
   final String label;
   final IconData? icon;
