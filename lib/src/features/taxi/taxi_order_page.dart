@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/auth_api.dart';
 import '../../core/design_tokens.dart';
+import '../../localization/app_localizations.dart';
 import '../../localization/localization_ext.dart';
+import '../../models/location.dart';
+import '../../services/location_service.dart';
 import '../../state/app_state.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/glass_dialog.dart';
 import '../../widgets/gradient_button.dart';
 import '../common/order_sent_page.dart';
+import 'pickup_location_picker_page.dart';
 
 class TaxiOrderPage extends StatefulWidget {
   const TaxiOrderPage({super.key});
@@ -25,10 +30,18 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
   String? toDistrict;
   int passengers = 1;
   DateTime selectedDate = DateTime.now();
-  TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay endTime = const TimeOfDay(hour: 10, minute: 0);
-  final TextEditingController noteCtrl = TextEditingController();
+  TimeOfDay scheduledTime = TimeOfDay.fromDateTime(DateTime.now());
   bool confirming = false;
+  PickupLocation? pickupLocation;
+  bool detectingPickup = false;
+  final LocationService _locationService = const LocationService();
+  final TextEditingController noteCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _detectInitialPickupLocation();
+  }
 
   @override
   void dispose() {
@@ -47,7 +60,8 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
         fromRegion != null &&
         fromDistrict != null &&
         toRegion != null &&
-        toDistrict != null;
+        toDistrict != null &&
+        pickupLocation != null;
 
     return Scaffold(
       appBar: AppBar(title: Text(strings.tr('orderTaxi'))),
@@ -155,6 +169,39 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                         ? null
                         : (value) => setState(() => toDistrict = value),
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _SectionTitle(label: strings.tr('pickupAddress')),
+                  GestureDetector(
+                    onTap: _openPickupLocationPicker,
+                    behavior: HitTestBehavior.opaque,
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: strings.tr('pickupAddress'),
+                        suffixIcon: const Icon(Icons.pin_drop_outlined),
+                      ),
+                      isEmpty: pickupLocation == null,
+                      child: pickupLocation == null
+                          ? const SizedBox.shrink()
+                          : Text(
+                              _pickupAddressLabel(strings),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: detectingPickup ? null : _useCurrentLocation,
+                      icon: detectingPickup
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location_rounded),
+                      label: Text(strings.tr('useCurrentLocation')),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -185,7 +232,7 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                     }).toList(),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  _SectionTitle(label: strings.tr('date')),
+                  _SectionTitle(label: strings.tr('scheduledTime')),
                   const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
@@ -201,17 +248,9 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _selectTimeRange(isStart: true),
+                          onPressed: _selectScheduledTime,
                           icon: const Icon(Icons.schedule_rounded),
-                          label: Text(startTime.format(context)),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _selectTimeRange(isStart: false),
-                          icon: const Icon(Icons.schedule_rounded),
-                          label: Text(endTime.format(context)),
+                          label: Text(scheduledTime.format(context)),
                         ),
                       ),
                     ],
@@ -228,45 +267,42 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                   const SizedBox(height: AppSpacing.sm),
                   AppTextField(
                     controller: noteCtrl,
-                    label: strings.tr('noteHint'),
-                    maxLines: 3,
+                    label: strings.tr('note'),
+                    hintText: strings.tr('noteHint'),
+                    floatingLabelBehavior: FloatingLabelBehavior.always,
                     minLines: 3,
+                    maxLines: 3,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
             GlassCard(
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          strings.tr('estimatedPrice'),
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          price == 0
-                              ? strings.tr('fillInfoForPrice')
-                              : NumberFormat.currency(
-                                  symbol: 'so\'m',
-                                  decimalDigits: 0,
-                                ).format(price),
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ],
+                  Text(
+                    strings.tr('confirmOrder'),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.md),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    !ready
+                        ? strings.tr('fillInfoForPrice')
+                        : price == null
+                            ? strings.tr('priceUnspecified')
+                            : _formatPrice(price),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
                   GradientButton(
-                    onPressed: !ready || price == 0 || confirming
+                    onPressed: !ready || confirming
                         ? null
-                        : () => _showSummary(context, price),
+                        : () => _showSummary(price),
                     label: strings.tr('confirmOrder'),
                     icon: Icons.check_rounded,
                     loading: confirming,
@@ -292,25 +328,83 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     }
   }
 
-  Future<void> _selectTimeRange({required bool isStart}) async {
+  Future<void> _selectScheduledTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: isStart ? startTime : endTime,
+      initialTime: scheduledTime,
     );
     if (picked != null) {
-      setState(() {
-        if (isStart) {
-          startTime = picked;
-        } else {
-          endTime = picked;
-        }
-      });
+      setState(() => scheduledTime = picked);
     }
   }
 
-  double _calculatePrice(AppState state) {
+  Future<void> _detectInitialPickupLocation() async {
+    final detected = await _locationService.tryFetchCurrentPickup();
+    if (mounted && detected != null) {
+      setState(() => pickupLocation = detected);
+    }
+  }
+
+  Future<void> _useCurrentLocation() async {
+    final strings = context.strings;
+    setState(() => detectingPickup = true);
+    try {
+      final location = await _locationService.fetchCurrentPickup();
+      if (!mounted) return;
+      setState(() => pickupLocation = location);
+    } on LocationPermissionException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.tr('locationPermissionDenied'))),
+      );
+    } on LocationServicesDisabledException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.tr('enableLocationServices'))),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.tr('locationUnavailable'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => detectingPickup = false);
+      }
+    }
+  }
+
+  Future<void> _openPickupLocationPicker() async {
+    final selected = await Navigator.of(context).push<PickupLocation>(
+      MaterialPageRoute(
+        builder: (_) => PickupLocationPickerPage(
+          initialLocation: pickupLocation,
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() => pickupLocation = selected);
+    }
+  }
+
+  String _pickupAddressLabel(AppLocalizations strings) {
+    if (pickupLocation != null &&
+        pickupLocation!.address.trim().isNotEmpty) {
+      return pickupLocation!.address;
+    }
+    if (pickupLocation != null) {
+      return '${pickupLocation!.latitude.toStringAsFixed(5)}, '
+          '${pickupLocation!.longitude.toStringAsFixed(5)}';
+    }
+    if (detectingPickup) {
+      return strings.tr('detectingLocation');
+    }
+    return strings.tr('tapToPickOnMap');
+  }
+
+  double? _calculatePrice(AppState state) {
     if (fromRegion == null || toRegion == null) {
-      return 0;
+      return null;
     }
     return state.calculateTaxiPrice(
       fromRegion: fromRegion!,
@@ -319,62 +413,76 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     );
   }
 
-  Future<void> _showSummary(BuildContext context, double price) async {
+  String _formatPrice(double price) {
+    final formatted = NumberFormat.decimalPattern().format(price);
+    return '$formatted so\'m';
+  }
+
+  Future<void> _showSummary(double? price) async {
     setState(() => confirming = true);
     await Future.delayed(const Duration(milliseconds: 350));
-    if (!context.mounted) return;
+    if (!mounted) return;
     final strings = context.strings;
 
     await showGlassDialog(
       context: context,
       barrierLabel: strings.tr('close'),
       builder: (dialogContext) {
+        final dialogStrings = dialogContext.strings;
+        final scheduledTimeLabel = scheduledTime.format(dialogContext);
         return GlassCard(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                strings.tr('orderSummary'),
+                dialogStrings.tr('orderSummary'),
                 style: Theme.of(
                   dialogContext,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.md),
               _SummaryRow(
-                label: strings.tr('fromLocation'),
+                label: dialogStrings.tr('fromLocation'),
                 value: '${fromRegion!}, ${fromDistrict!}',
               ),
               _SummaryRow(
-                label: strings.tr('toLocation'),
+                label: dialogStrings.tr('toLocation'),
                 value: '${toRegion!}, ${toDistrict!}',
               ),
+              if (pickupLocation != null)
+                _SummaryRow(
+                  label: dialogStrings.tr('pickupAddress'),
+                  value: pickupLocation!.address.trim().isEmpty
+                      ? '${pickupLocation!.latitude.toStringAsFixed(5)}, '
+                          '${pickupLocation!.longitude.toStringAsFixed(5)}'
+                      : pickupLocation!.address,
+                ),
               _SummaryRow(
-                label: strings.tr('passengers'),
+                label: dialogStrings.tr('passengers'),
                 value: passengers == 4
-                    ? strings.tr('fullCar')
+                    ? dialogStrings.tr('fullCar')
                     : passengers.toString(),
               ),
               _SummaryRow(
-                label: strings.tr('date'),
+                label: dialogStrings.tr('date'),
                 value: DateFormat('dd.MM.yyyy').format(selectedDate),
               ),
               _SummaryRow(
-                label: strings.tr('timeRange'),
-                value:
-                    '${startTime.format(context)} - ${endTime.format(context)}',
+                label: dialogStrings.tr('scheduledTime'),
+                value: scheduledTimeLabel,
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(strings.tr('note')),
-              Text(
-                noteCtrl.text.isEmpty ? strings.tr('noNote') : noteCtrl.text,
+              _SummaryRow(
+                label: dialogStrings.tr('note'),
+                value: noteCtrl.text.isEmpty
+                    ? dialogStrings.tr('noNote')
+                    : noteCtrl.text,
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                NumberFormat.currency(
-                  symbol: 'so\'m',
-                  decimalDigits: 0,
-                ).format(price),
+                price == null
+                    ? dialogStrings.tr('priceUnspecified')
+                    : _formatPrice(price),
                 style: Theme.of(dialogContext).textTheme.headlineSmall
                     ?.copyWith(fontWeight: FontWeight.w700),
               ),
@@ -382,9 +490,9 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
               GradientButton(
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
-                  _sendOrder(price);
+                  _sendOrder();
                 },
-                label: strings.tr('sendOrder'),
+                label: dialogStrings.tr('sendOrder'),
                 icon: Icons.send_rounded,
               ),
             ],
@@ -393,39 +501,58 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
       },
     );
 
-    if (!context.mounted) return;
+    if (!mounted) return;
     setState(() => confirming = false);
   }
 
-  Future<void> _sendOrder(double price) async {
+  Future<void> _sendOrder() async {
     final state = context.read<AppState>();
-    final order = state.createTaxiOrder(
-      fromRegion: fromRegion!,
-      fromDistrict: fromDistrict!,
-      toRegion: toRegion!,
-      toDistrict: toDistrict!,
-      passengers: passengers,
-      date: selectedDate,
-      start: startTime,
-      end: endTime,
-      note: noteCtrl.text,
-    );
+    final strings = context.strings;
+    if (pickupLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.tr('tapToPickOnMap'))),
+      );
+      return;
+    }
+    try {
+      final order = await state.createTaxiOrder(
+        fromRegion: fromRegion!,
+        fromDistrict: fromDistrict!,
+        toRegion: toRegion!,
+        toDistrict: toDistrict!,
+        passengers: passengers,
+        scheduledDate: selectedDate,
+        scheduledTime: scheduledTime,
+        pickupLocation: pickupLocation!,
+        note: noteCtrl.text,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder<void>(
-        pageBuilder: (_, __, ___) => OrderSentPage(
-          title: context.strings.tr('orderSentTitle'),
-          message: context.strings.tr('orderSentDescription'),
-          orderId: order.id,
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder<void>(
+          pageBuilder: (_, __, ___) => OrderSentPage(
+            title: strings.tr('orderSentTitle'),
+            message: strings.tr('orderSentDescription'),
+            orderId: order.id,
+          ),
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
         ),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-      ),
-    );
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.strings.tr('unexpectedError'))),
+      );
+    }
   }
 }
 

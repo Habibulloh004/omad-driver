@@ -1,45 +1,65 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/auth_api.dart';
 import '../../localization/localization_ext.dart';
 import '../../models/order.dart';
 import '../../state/app_state.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
 
-class DriverDashboard extends StatelessWidget {
+const Duration _kDriverAcceptWindow = Duration(minutes: 5);
+
+class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
+
+  @override
+  State<DriverDashboard> createState() => _DriverDashboardState();
+}
+
+class _DriverDashboardState extends State<DriverDashboard> {
+  static const Duration _autoRefreshInterval = Duration(minutes: 10);
+  Timer? _profileRefreshTimer;
+  bool _isProfileRefreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleAutoRefresh();
+  }
+
+  @override
+  void dispose() {
+    _profileRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleAutoRefresh() {
+    _profileRefreshTimer?.cancel();
+    _profileRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) {
+      if (!mounted) return;
+      _refreshDriverData(silent: true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final strings = context.strings;
+    _drainDriverRealtimeToasts(state);
     final user = state.currentUser;
-    final pendingOrders = state.pendingOrders;
-    final activeOrders = state.activeOrders;
-    final completedToday = state.historyOrders
-        .where(
-          (order) =>
-              order.status == OrderStatus.completed &&
-              order.date.day == DateTime.now().day,
-        )
-        .toList();
-    final totalToday = completedToday.fold<double>(
-      0,
-      (total, order) => total + order.price,
-    );
-    final completedMonth = state.historyOrders
-        .where(
-          (order) =>
-              order.status == OrderStatus.completed &&
-              order.date.month == DateTime.now().month,
-        )
-        .toList();
-    final totalMonth = completedMonth.fold<double>(
-      0,
-      (total, order) => total + order.price,
-    );
+    final stats = state.driverStats;
+    final pendingOrders = state.driverAvailableOrders;
+    final activeOrders = state.driverActiveOrders;
+    final loading = state.isDriverContextLoading;
+    final totalToday = stats?.dailyRevenue ?? 0;
+    final todayCount = stats?.dailyOrders ?? 0;
+    final totalMonth = stats?.monthlyRevenue ?? 0;
+    final monthCount = stats?.monthlyOrders ?? 0;
+    final balance = stats?.currentBalance ?? user.balance;
 
     return Scaffold(
       appBar: AppBar(
@@ -51,12 +71,31 @@ class DriverDashboard extends StatelessWidget {
           },
         ),
         title: Text(strings.tr('driverDashboard')),
+        actions: [
+          IconButton(
+            tooltip: strings.tr('refresh'),
+            onPressed: _isProfileRefreshing ? null : () => _refreshDriverData(),
+            icon: SizedBox.square(
+              dimension: 24,
+              child: _isProfileRefreshing
+                  ? const Padding(
+                      padding: EdgeInsets.all(2),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+            ),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (loading) ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 16),
+            ],
             GlassCard(
               child: Row(
                 children: [
@@ -82,19 +121,14 @@ class DriverDashboard extends StatelessWidget {
                         Text(strings.tr('currentBalance')),
                         Text(
                           NumberFormat.currency(
-                            symbol: 'so\'m',
+                            symbol: 'so\'m ',
                             decimalDigits: 0,
-                          ).format(user.balance),
+                          ).format(balance),
                           style: Theme.of(context).textTheme.headlineMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ],
                     ),
-                  ),
-                  GradientButton(
-                    onPressed: () => _showWithdrawDialog(context),
-                    label: strings.tr('withdraw'),
-                    icon: Icons.payments_rounded,
                   ),
                 ],
               ),
@@ -112,17 +146,14 @@ class DriverDashboard extends StatelessWidget {
                         Text(
                           strings
                               .tr('ordersCount')
-                              .replaceFirst(
-                                '{count}',
-                                completedToday.length.toString(),
-                              ),
+                              .replaceFirst('{count}', todayCount.toString()),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           NumberFormat.currency(
-                            symbol: 'so\'m',
+                            symbol: 'so\'m ',
                             decimalDigits: 0,
                           ).format(totalToday),
                           style: Theme.of(context).textTheme.headlineSmall
@@ -143,17 +174,14 @@ class DriverDashboard extends StatelessWidget {
                         Text(
                           strings
                               .tr('ordersCount')
-                              .replaceFirst(
-                                '{count}',
-                                completedMonth.length.toString(),
-                              ),
+                              .replaceFirst('{count}', monthCount.toString()),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           NumberFormat.currency(
-                            symbol: 'so\'m',
+                            symbol: 'so\'m ',
                             decimalDigits: 0,
                           ).format(totalMonth),
                           style: Theme.of(context).textTheme.headlineSmall
@@ -216,7 +244,10 @@ class DriverDashboard extends StatelessWidget {
                     .map(
                       (order) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _PendingOrderTile(order: order),
+                        child: _PendingOrderTile(
+                          key: ValueKey(order.id),
+                          order: order,
+                        ),
                       ),
                     )
                     .toList(),
@@ -244,7 +275,10 @@ class DriverDashboard extends StatelessWidget {
                     .map(
                       (order) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _ActiveOrderTile(order: order),
+                        child: _ActiveOrderTile(
+                          key: ValueKey(order.id),
+                          order: order,
+                        ),
                       ),
                     )
                     .toList(),
@@ -256,31 +290,47 @@ class DriverDashboard extends StatelessWidget {
     );
   }
 
-  void _showWithdrawDialog(BuildContext context) {
-    final strings = context.strings;
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(strings.tr('withdraw')),
-          content: Text(strings.tr('withdrawMock')),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(strings.tr('close')),
-            ),
-          ],
-        );
-      },
-    );
+  Future<void> _refreshDriverData({bool silent = false}) async {
+    if (_isProfileRefreshing) return;
+    if (silent) {
+      _isProfileRefreshing = true;
+    } else {
+      setState(() => _isProfileRefreshing = true);
+    }
+    final state = context.read<AppState>();
+    try {
+      await Future.wait([
+        state.refreshProfile(),
+        state.refreshDriverStatus(loadDashboard: true),
+      ]);
+    } on ApiException catch (error) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (!silent && mounted) {
+        final strings = context.strings;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(strings.tr('unexpectedError'))));
+      }
+    } finally {
+      if (silent) {
+        _isProfileRefreshing = false;
+      } else if (mounted) {
+        setState(() => _isProfileRefreshing = false);
+      } else {
+        _isProfileRefreshing = false;
+      }
+    }
   }
 
   void _showHistory(BuildContext context) {
     final strings = context.strings;
     final state = context.read<AppState>();
-    final completed = state.historyOrders
-        .where((order) => order.status == OrderStatus.completed)
-        .toList();
+    final completed = state.driverCompletedOrders;
 
     showModalBottomSheet(
       context: context,
@@ -300,22 +350,32 @@ class DriverDashboard extends StatelessWidget {
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 16),
-                ...completed.map(
-                  (order) => ListTile(
-                    leading: Icon(
-                      order.isTaxi
-                          ? Icons.local_taxi_rounded
-                          : Icons.inventory_2_rounded,
-                    ),
-                    title: Text('${order.fromDistrict} → ${order.toDistrict}'),
-                    subtitle: Text(
-                      NumberFormat.currency(
-                        symbol: 'so\'m',
-                        decimalDigits: 0,
-                      ).format(order.price),
+                if (completed.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: Text(strings.tr('noHistory'))),
+                  )
+                else
+                  ...completed.map(
+                    (order) => ListTile(
+                      leading: Icon(
+                        order.isTaxi
+                            ? Icons.local_taxi_rounded
+                            : Icons.inventory_2_rounded,
+                      ),
+                      title: Text(
+                        '${order.fromDistrict} → ${order.toDistrict}',
+                      ),
+                      subtitle: order.priceAvailable
+                          ? Text(
+                              NumberFormat.currency(
+                                symbol: 'so\'m ',
+                                decimalDigits: 0,
+                              ).format(order.price),
+                            )
+                          : null,
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -327,7 +387,7 @@ class DriverDashboard extends StatelessWidget {
   void _showPendingByType(BuildContext context, OrderType type) {
     final strings = context.strings;
     final state = context.read<AppState>();
-    final items = state.pendingOrders
+    final items = state.driverAvailableOrders
         .where((order) => order.type == type)
         .toList();
 
@@ -367,12 +427,14 @@ class DriverDashboard extends StatelessWidget {
                       title: Text(
                         '${order.fromDistrict} → ${order.toDistrict}',
                       ),
-                      subtitle: Text(
-                        NumberFormat.currency(
-                          symbol: 'so\'m',
-                          decimalDigits: 0,
-                        ).format(order.price),
-                      ),
+                      subtitle: order.priceAvailable
+                          ? Text(
+                              NumberFormat.currency(
+                                symbol: 'so\'m ',
+                                decimalDigits: 0,
+                              ).format(order.price),
+                            )
+                          : null,
                     ),
                   ),
               ],
@@ -386,7 +448,7 @@ class DriverDashboard extends StatelessWidget {
   void _showActive(BuildContext context) {
     final strings = context.strings;
     final state = context.read<AppState>();
-    final items = state.activeOrders;
+    final items = state.driverActiveOrders;
 
     showModalBottomSheet(
       context: context,
@@ -424,12 +486,14 @@ class DriverDashboard extends StatelessWidget {
                       title: Text(
                         '${order.fromDistrict} → ${order.toDistrict}',
                       ),
-                      subtitle: Text(
-                        NumberFormat.currency(
-                          symbol: 'so\'m',
-                          decimalDigits: 0,
-                        ).format(order.price),
-                      ),
+                      subtitle: order.priceAvailable
+                          ? Text(
+                              NumberFormat.currency(
+                                symbol: 'so\'m ',
+                                decimalDigits: 0,
+                              ).format(order.price),
+                            )
+                          : null,
                     ),
                   ),
               ],
@@ -439,10 +503,30 @@ class DriverDashboard extends StatelessWidget {
       },
     );
   }
+
+  void _drainDriverRealtimeToasts(AppState state) {
+    final pending = <({String title, String message})>[];
+    while (true) {
+      final toast = state.takeNextDriverRealtimeMessage();
+      if (toast == null) break;
+      pending.add(toast);
+    }
+    if (pending.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      for (final toast in pending) {
+        final text = toast.title.isEmpty
+            ? toast.message
+            : '${toast.title}: ${toast.message}';
+        messenger.showSnackBar(SnackBar(content: Text(text)));
+      }
+    });
+  }
 }
 
 class _PendingOrderTile extends StatefulWidget {
-  const _PendingOrderTile({required this.order});
+  const _PendingOrderTile({super.key, required this.order});
 
   final AppOrder order;
 
@@ -453,14 +537,25 @@ class _PendingOrderTile extends StatefulWidget {
 class _PendingOrderTileState extends State<_PendingOrderTile>
     with SingleTickerProviderStateMixin {
   late final AnimationController controller;
+  bool _processing = false;
 
   @override
   void initState() {
     super.initState();
     controller = AnimationController(
       vsync: this,
-      duration: const Duration(minutes: 5),
-    )..forward();
+      duration: _kDriverAcceptWindow,
+    );
+    _restartCountdown();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PendingOrderTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.order.id != widget.order.id ||
+        oldWidget.order.createdAt != widget.order.createdAt) {
+      _restartCountdown();
+    }
   }
 
   @override
@@ -472,6 +567,12 @@ class _PendingOrderTileState extends State<_PendingOrderTile>
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final order = widget.order;
+    final startTimeLabel = order.startTime.format(context);
+    final endTimeLabel = order.endTime.format(context);
+    final timeLabel = startTimeLabel == endTimeLabel
+        ? startTimeLabel
+        : '$startTimeLabel - $endTimeLabel';
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -480,37 +581,36 @@ class _PendingOrderTileState extends State<_PendingOrderTile>
             children: [
               Chip(
                 avatar: Icon(
-                  widget.order.isTaxi
+                  order.isTaxi
                       ? Icons.local_taxi_rounded
                       : Icons.inventory_2_rounded,
                 ),
                 label: Text(
-                  widget.order.isTaxi
+                  order.isTaxi
                       ? strings.tr('taxiOrder')
                       : strings.tr('deliveryOrder'),
                 ),
               ),
               const Spacer(),
-              Text(widget.order.id),
+              Text(order.id),
             ],
           ),
           const SizedBox(height: 12),
-          Text('${widget.order.fromDistrict} → ${widget.order.toDistrict}'),
+          Text('${order.fromDistrict} → ${order.toDistrict}'),
           const SizedBox(height: 8),
           AnimatedBuilder(
             animation: controller,
             builder: (context, child) {
-              final remaining = Duration(
-                seconds:
-                    ((controller.duration?.inSeconds ?? 0) *
-                            (1 - controller.value))
-                        .round(),
-              );
-              final minutes = (remaining.inMinutes).toString().padLeft(2, '0');
+              final totalSeconds = controller.duration?.inSeconds ?? 0;
+              final remainingSeconds = ((totalSeconds) * (1 - controller.value))
+                  .round();
+              final remaining = Duration(seconds: remainingSeconds);
+              final minutes = remaining.inMinutes.toString().padLeft(2, '0');
               final seconds = (remaining.inSeconds % 60).toString().padLeft(
                 2,
                 '0',
               );
+              final expired = controller.value >= 0.999;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -521,35 +621,88 @@ class _PendingOrderTileState extends State<_PendingOrderTile>
                         .tr('acceptTimer')
                         .replaceFirst('{time}', '$minutes:$seconds'),
                   ),
+                  const SizedBox(height: 12),
+                  GradientButton(
+                    onPressed: _processing || expired
+                        ? null
+                        : () => _acceptOrder(context),
+                    label: expired
+                        ? strings.tr('orderExpired')
+                        : strings.tr('acceptOrder'),
+                    icon: expired
+                        ? Icons.lock_clock_rounded
+                        : Icons.check_circle_rounded,
+                    loading: _processing,
+                  ),
                 ],
               );
             },
-          ),
-          const SizedBox(height: 12),
-          GradientButton(
-            onPressed: () {
-              context.read<AppState>().acceptOrder(widget.order.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(strings.tr('orderAccepted'))),
-              );
-            },
-            label: strings.tr('acceptOrder'),
-            icon: Icons.check_circle_rounded,
           ),
         ],
       ),
     );
   }
+
+  void _restartCountdown() {
+    controller.stop();
+    final createdAt = widget.order.createdAt;
+    var elapsed = createdAt == null
+        ? Duration.zero
+        : DateTime.now().difference(createdAt);
+    if (elapsed.isNegative) {
+      elapsed = Duration.zero;
+    }
+    final totalMs = _kDriverAcceptWindow.inMilliseconds;
+    final ratio = totalMs == 0 ? 1.0 : elapsed.inMilliseconds / totalMs;
+    final initialValue = ratio.clamp(0.0, 1.0).toDouble();
+    controller.value = initialValue;
+    if (initialValue < 1.0) {
+      controller.forward(from: initialValue);
+    }
+  }
+
+  Future<void> _acceptOrder(BuildContext context) async {
+    final strings = context.strings;
+    setState(() => _processing = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<AppState>().acceptDriverOrder(widget.order);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('orderAccepted'))),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('unexpectedError'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _processing = false);
+      }
+    }
+  }
 }
 
-class _ActiveOrderTile extends StatelessWidget {
-  const _ActiveOrderTile({required this.order});
+class _ActiveOrderTile extends StatefulWidget {
+  const _ActiveOrderTile({super.key, required this.order});
 
   final AppOrder order;
 
   @override
+  State<_ActiveOrderTile> createState() => _ActiveOrderTileState();
+}
+
+class _ActiveOrderTileState extends State<_ActiveOrderTile> {
+  bool _processing = false;
+
+  @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final order = widget.order;
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -566,23 +719,40 @@ class _ActiveOrderTile extends StatelessWidget {
               Text(order.id),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '${order.startTime.format(context)} - ${order.endTime.format(context)}',
-          ),
           const SizedBox(height: 12),
           GradientButton(
-            onPressed: () {
-              context.read<AppState>().completeOrder(order.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(strings.tr('orderCompleted'))),
-              );
-            },
+            onPressed: _processing ? null : () => _completeOrder(context),
             label: strings.tr('completeOrder'),
             icon: Icons.done_all_rounded,
+            loading: _processing,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _completeOrder(BuildContext context) async {
+    final strings = context.strings;
+    setState(() => _processing = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<AppState>().completeDriverOrder(widget.order);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('orderCompleted'))),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('unexpectedError'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _processing = false);
+      }
+    }
   }
 }

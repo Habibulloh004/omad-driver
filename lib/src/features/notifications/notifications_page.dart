@@ -8,8 +8,22 @@ import '../../models/app_notification.dart';
 import '../../state/app_state.dart';
 import '../../widgets/glass_card.dart';
 
-class NotificationsPage extends StatelessWidget {
+class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
+
+  @override
+  State<NotificationsPage> createState() => _NotificationsPageState();
+}
+
+class _NotificationsPageState extends State<NotificationsPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<AppState>().refreshNotifications();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

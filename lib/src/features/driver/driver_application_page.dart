@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/auth_api.dart';
 import '../../localization/localization_ext.dart';
 import '../../state/app_state.dart';
 import '../../widgets/app_text_field.dart';
@@ -20,7 +24,8 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
   late final TextEditingController phoneCtrl;
   final TextEditingController carModelCtrl = TextEditingController();
   final TextEditingController carNumberCtrl = TextEditingController();
-  final TextEditingController licenseCtrl = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+  File? _licenseFile;
 
   bool loading = false;
 
@@ -38,7 +43,6 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
     phoneCtrl.dispose();
     carModelCtrl.dispose();
     carNumberCtrl.dispose();
-    licenseCtrl.dispose();
     super.dispose();
   }
 
@@ -92,19 +96,14 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
                   Text(strings.tr('driverLicenseUpload')),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      licenseCtrl.text = 'driver_license_mock.png';
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(strings.tr('mockUploadSuccess')),
-                        ),
-                      );
-                    },
+                    onPressed: loading ? null : _pickLicense,
                     icon: const Icon(Icons.cloud_upload_rounded),
                     label: Text(
-                      licenseCtrl.text.isEmpty
+                      _licenseFile == null
                           ? strings.tr('uploadPlaceholder')
-                          : licenseCtrl.text,
+                          : _licenseFile!.path
+                                .split(Platform.pathSeparator)
+                                .last,
                     ),
                   ),
                 ],
@@ -132,26 +131,56 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
       return;
     }
 
+    final licenseFile = _licenseFile;
+    if (licenseFile == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.tr('noImageSelected'))));
+      return;
+    }
+
     setState(() => loading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-
-    context.read<AppState>().submitDriverApplication(
-      fullName: nameCtrl.text,
-      carModel: carModelCtrl.text,
-      carNumber: carNumberCtrl.text,
-    );
-
-    if (!mounted) return;
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OrderSentPage(
-          title: strings.tr('applicationSentTitle'),
-          message: strings.tr('applicationSentDescription'),
+    try {
+      await context.read<AppState>().submitDriverApplication(
+        fullName: nameCtrl.text,
+        carModel: carModelCtrl.text,
+        carNumber: carNumberCtrl.text,
+        licenseFile: licenseFile,
+      );
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OrderSentPage(
+            title: strings.tr('applicationSentTitle'),
+            message: strings.tr('applicationSentDescription'),
+          ),
         ),
-      ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.tr('unexpectedError'))));
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  Future<void> _pickLicense() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1800,
+      imageQuality: 85,
     );
+    if (picked == null) return;
+    setState(() => _licenseFile = File(picked.path));
   }
 }

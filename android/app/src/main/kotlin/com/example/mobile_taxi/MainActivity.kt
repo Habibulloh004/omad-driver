@@ -1,4 +1,4 @@
-package com.example.mobile_taxi
+package com.possible.mobile_taxi
 
 import io.flutter.embedding.android.FlutterActivity
 

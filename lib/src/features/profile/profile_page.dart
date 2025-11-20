@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/auth_api.dart';
 import '../../core/design_tokens.dart';
 import '../../localization/app_localizations.dart';
 import '../../localization/localization_ext.dart';
@@ -9,11 +10,19 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/glass_dialog.dart';
 import '../../widgets/gradient_button.dart';
 import '../driver/driver_application_page.dart';
+import 'edit_profile_photo_page.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key, required this.onOpenDriverDashboard});
 
   final VoidCallback onOpenDriverDashboard;
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  bool _refreshingProfile = false;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +31,19 @@ class ProfilePage extends StatelessWidget {
     final user = state.currentUser;
     final mediaPadding = MediaQuery.of(context).padding;
     final theme = Theme.of(context);
+    final hasApprovedDriverAccess = user.isDriver && user.driverApproved;
+    final pendingDriverReview =
+        (!user.isDriver && state.driverApplicationSubmitted) ||
+        (user.isDriver && !user.driverApproved);
+    final driverButtonLabel = hasApprovedDriverAccess
+        ? strings.tr('switchToDriver')
+        : pendingDriverReview
+            ? strings.tr('applicationPending')
+            : strings.tr('becomeDriver');
+    final VoidCallback? driverButtonAction =
+        (hasApprovedDriverAccess || (!pendingDriverReview && !user.isDriver))
+            ? () => _handleDriverNavigation(context)
+            : null;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -61,7 +83,18 @@ class ProfilePage extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 40,
-                      backgroundImage: NetworkImage(user.avatarUrl),
+                      backgroundImage: user.avatarUrl.isEmpty
+                          ? null
+                          : NetworkImage(user.avatarUrl),
+                      child: user.avatarUrl.isEmpty
+                          ? Icon(
+                              Icons.person_rounded,
+                              size: 36,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                            )
+                          : null,
                     ),
                     const SizedBox(width: AppSpacing.lg),
                     Expanded(
@@ -113,6 +146,37 @@ class ProfilePage extends StatelessWidget {
                       tooltip: strings.tr('editProfile'),
                     ),
                   ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _refreshingProfile
+                        ? null
+                        : () => _refreshProfileData(context),
+                    icon: _refreshingProfile
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded),
+                    label: Text(strings.tr('refreshProfile')),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const EditProfilePhotoPage(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.camera_alt_rounded),
+                    label: Text(strings.tr('changePhoto')),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 GradientButton(
@@ -180,12 +244,8 @@ class ProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 GradientButton(
-                  onPressed: () => _handleDriverNavigation(context),
-                  label: user.isDriver
-                      ? (user.driverApproved
-                            ? strings.tr('switchToDriver')
-                            : strings.tr('applicationPending'))
-                      : strings.tr('becomeDriver'),
+                  onPressed: driverButtonAction,
+                  label: driverButtonLabel,
                   icon: Icons.drive_eta_rounded,
                 ),
                 if (user.isDriver && user.driverApproved) ...[
@@ -211,7 +271,6 @@ class ProfilePage extends StatelessWidget {
     final strings = context.strings;
     final state = context.read<AppState>();
     final nameCtrl = TextEditingController(text: state.currentUser.fullName);
-    final avatarCtrl = TextEditingController(text: state.currentUser.avatarUrl);
 
     showModalBottomSheet(
       context: context,
@@ -242,21 +301,24 @@ class ProfilePage extends StatelessWidget {
                     labelText: strings.tr('fullName'),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                TextField(
-                  controller: avatarCtrl,
-                  decoration: InputDecoration(
-                    labelText: strings.tr('avatarUrl'),
-                  ),
-                ),
                 const SizedBox(height: AppSpacing.lg),
                 GradientButton(
-                  onPressed: () {
-                    state.updateProfile(
-                      name: nameCtrl.text,
-                      avatar: avatarCtrl.text,
-                    );
-                    Navigator.pop(context);
+                  onPressed: () async {
+                    try {
+                      await state.updateProfile(name: nameCtrl.text);
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                    } on ApiException catch (error) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(error.message)));
+                    } catch (_) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(strings.tr('unexpectedError'))),
+                      );
+                    }
                   },
                   label: strings.tr('save'),
                   icon: Icons.save_rounded,
@@ -316,11 +378,38 @@ class ProfilePage extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               GradientButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(strings.tr('passwordUpdated'))),
-                  );
+                onPressed: () async {
+                  if (newCtrl.text != confirmCtrl.text) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(strings.tr('passwordMismatch'))),
+                    );
+                    return;
+                  }
+                  final state = context.read<AppState>();
+                  try {
+                    await state.changePassword(
+                      oldPassword: oldCtrl.text,
+                      newPassword: newCtrl.text,
+                      confirmPassword: confirmCtrl.text,
+                    );
+                    if (!context.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(strings.tr('passwordUpdated'))),
+                    );
+                  } on ApiException catch (error) {
+                    if (!context.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(error.message)));
+                  } catch (_) {
+                    if (!context.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(strings.tr('unexpectedError'))),
+                    );
+                  }
                 },
                 label: strings.tr('save'),
                 icon: Icons.check_rounded,
@@ -332,10 +421,11 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  void _handleDriverNavigation(BuildContext context) {
+  Future<void> _handleDriverNavigation(BuildContext context) async {
     final state = context.read<AppState>();
     final user = state.currentUser;
     final strings = context.strings;
+    final messenger = ScaffoldMessenger.of(context);
 
     if (!user.isDriver && !state.driverApplicationSubmitted) {
       Navigator.push(
@@ -346,14 +436,48 @@ class ProfilePage extends StatelessWidget {
     }
 
     if (!user.driverApproved) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(strings.tr('applicationPending'))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('applicationPending'))),
+      );
       return;
     }
 
+    try {
+      await state.refreshDriverStatus(loadDashboard: true);
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('unexpectedError'))),
+      );
+    }
+
     state.switchToDriverMode();
-    onOpenDriverDashboard();
+    widget.onOpenDriverDashboard();
+  }
+
+  Future<void> _refreshProfileData(BuildContext context) async {
+    if (_refreshingProfile) return;
+    setState(() => _refreshingProfile = true);
+    final strings = context.strings;
+    final messenger = ScaffoldMessenger.of(context);
+    final state = context.read<AppState>();
+    try {
+      await Future.wait([
+        state.refreshProfile(),
+        state.refreshDriverStatus(loadDashboard: true),
+      ]);
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('unexpectedError'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _refreshingProfile = false);
+      }
+    }
   }
 }
 

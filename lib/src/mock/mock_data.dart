@@ -21,6 +21,8 @@ class MockData {
     avatarUrl:
         'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=200&q=80',
     rating: 4.8,
+    language: 'uz_latin',
+    role: 'user',
   );
 
   static List<AppOrder> mockOrders() {
@@ -33,6 +35,7 @@ class MockData {
     return [
       AppOrder(
         id: 'ORD-2024-001',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 1)),
         type: OrderType.taxi,
         fromRegion: 'Toshkent',
         fromDistrict: 'Yunusobod',
@@ -43,15 +46,21 @@ class MockData {
         startTime: now,
         endTime: later,
         price: 35000,
+        priceAvailable: true,
         status: OrderStatus.active,
         note: 'Ofisga yetib borgach telefon qiling.',
         driverName: 'Jahongir Karimov',
         driverPhone: '+998 97 556 78 90',
         vehicle: 'Chevrolet Malibu',
         vehiclePlate: '01 A777 AA',
+        fromRegionId: 1,
+        fromDistrictId: 101,
+        toRegionId: 1,
+        toDistrictId: 104,
       ),
       AppOrder(
         id: 'ORD-2024-002',
+        createdAt: DateTime.now().subtract(const Duration(days: 1)),
         type: OrderType.delivery,
         fromRegion: 'Samarqand',
         fromDistrict: 'Urgut',
@@ -62,15 +71,21 @@ class MockData {
         startTime: const TimeOfDay(hour: 16, minute: 0),
         endTime: const TimeOfDay(hour: 18, minute: 30),
         price: 78000,
+        priceAvailable: true,
         status: OrderStatus.completed,
         note: 'Hujjatlar, ehtiyotkorlik bilan.',
         driverName: 'Dilshod Mirzayev',
         driverPhone: '+998 93 456 12 34',
         vehicle: 'Damas',
         vehiclePlate: '30 B456 BB',
+        fromRegionId: 2,
+        fromDistrictId: 205,
+        toRegionId: 1,
+        toDistrictId: 102,
       ),
       AppOrder(
         id: 'ORD-2024-003',
+        createdAt: DateTime.now().subtract(const Duration(days: 3)),
         type: OrderType.taxi,
         fromRegion: 'Farg‘ona',
         fromDistrict: 'Marg‘ilon',
@@ -81,8 +96,13 @@ class MockData {
         startTime: const TimeOfDay(hour: 9, minute: 20),
         endTime: const TimeOfDay(hour: 10, minute: 10),
         price: 45000,
+        priceAvailable: true,
         status: OrderStatus.cancelled,
         note: 'Safar bekor qilindi.',
+        fromRegionId: 3,
+        fromDistrictId: 305,
+        toRegionId: 3,
+        toDistrictId: 301,
       ),
     ];
   }

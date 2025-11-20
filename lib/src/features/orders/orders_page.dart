@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/auth_api.dart';
 import '../../core/design_tokens.dart';
 import '../../localization/localization_ext.dart';
 import '../../models/order.dart';
@@ -41,6 +42,7 @@ class _OrdersPageState extends State<OrdersPage>
     super.build(context);
     final state = context.watch<AppState>();
     final strings = context.strings;
+    _drainUserRealtimeToasts(state);
     final activeOrders = state.activeOrders;
     final historyOrders = state.historyOrders;
     final mediaPadding = MediaQuery.of(context).padding;
@@ -48,99 +50,132 @@ class _OrdersPageState extends State<OrdersPage>
         mediaPadding.bottom + AppSpacing.xxl * 2 + AppSpacing.lg;
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.md + mediaPadding.left,
-        AppSpacing.lg + mediaPadding.top,
-        AppSpacing.md + mediaPadding.right,
-        AppSpacing.sm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            strings.tr('ordersTitle'),
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        if (historyOrders.isNotEmpty)
+          Positioned(
+            left: AppSpacing.sm,
+            right: AppSpacing.sm,
+            bottom: AppSpacing.sm,
+            child: IgnorePointer(
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.cardRadius,
+                  boxShadow: AppShadows.soft(
+                    baseColor: theme.colorScheme.primary,
+                    isDark: theme.brightness == Brightness.dark,
+                  ),
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          PillTabs(
-            tabs: [strings.tr('activeTab'), strings.tr('historyTab')],
-            current: currentTab,
-            onChanged: _animateToTab,
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md + mediaPadding.left,
+            AppSpacing.lg + mediaPadding.top,
+            AppSpacing.md + mediaPadding.right,
+            AppSpacing.sm,
           ),
-          const SizedBox(height: AppSpacing.md),
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              physics: const BouncingScrollPhysics(),
-              clipBehavior: Clip.none,
-              onPageChanged: (index) {
-                if (currentTab == index) return;
-                setState(() => currentTab = index);
-              },
-              itemCount: 2,
-              itemBuilder: (context, index) {
-                final isActiveTab = index == 0;
-                final orders = isActiveTab ? activeOrders : historyOrders;
-                final emptyText = isActiveTab
-                    ? strings.tr('noActiveOrders')
-                    : strings.tr('noHistory');
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                strings.tr('ordersTitle'),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              PillTabs(
+                tabs: [strings.tr('activeTab'), strings.tr('historyTab')],
+                current: currentTab,
+                onChanged: _animateToTab,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: ClipRect(
+                  clipper: const _OrdersViewportClipper(),
+                  child: PageView.builder(
+                    controller: _pageController,
+                    physics: const BouncingScrollPhysics(),
+                    clipBehavior: Clip.none,
+                    onPageChanged: (index) {
+                      if (currentTab == index) return;
+                      setState(() => currentTab = index);
+                    },
+                    itemCount: 2,
+                    itemBuilder: (context, index) {
+                      final isActiveTab = index == 0;
+                      final orders = isActiveTab ? activeOrders : historyOrders;
+                      final emptyText = isActiveTab
+                          ? strings.tr('noActiveOrders')
+                          : strings.tr('noHistory');
 
-                final child = orders.isEmpty
-                    ? Center(
-                        key: ValueKey('empty-$index'),
-                        child: Text(
-                          emptyText,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      )
-                    : ListView.separated(
-                        key: PageStorageKey('orders-$index'),
-                        physics: const BouncingScrollPhysics(),
-                        padding: EdgeInsets.only(
-                          top: AppSpacing.sm,
-                          bottom: bottomSpacing,
-                        ),
-                        itemCount: orders.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: AppSpacing.sm),
-                        itemBuilder: (context, listIndex) {
-                          final order = orders[listIndex];
-                          return _OrderCard(
-                            order: order,
-                            onTap: () => _openDetails(context, order),
-                          );
-                        },
+                      final child = orders.isEmpty
+                          ? Center(
+                              key: ValueKey('empty-$index'),
+                              child: Text(
+                                emptyText,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            )
+                          : ListView.separated(
+                              key: PageStorageKey('orders-$index'),
+                              physics: const BouncingScrollPhysics(),
+                              clipBehavior: Clip.none,
+                              padding: EdgeInsets.only(
+                                top: AppSpacing.sm,
+                                bottom: bottomSpacing,
+                              ),
+                              itemCount: orders.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: AppSpacing.sm),
+                              itemBuilder: (context, listIndex) {
+                                final order = orders[listIndex];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.xs,
+                                  ),
+                                  child: _OrderCard(
+                                    order: order,
+                                    onTap: () => _openDetails(context, order),
+                                  ),
+                                );
+                              },
+                            );
+
+                      return _OrdersParallaxPage(
+                        controller: _pageController,
+                        index: index,
+                        child: child,
                       );
-
-                return _OrdersParallaxPage(
-                  controller: _pageController,
-                  index: index,
-                  child: child,
-                );
-              },
-            ),
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Future<void> _openDetails(BuildContext context, AppOrder order) async {
-    final strings = context.strings;
-    final time =
-        '${order.startTime.format(context)} - ${order.endTime.format(context)}';
-    final date = DateFormat('dd MMMM, yyyy').format(order.date);
+  Future<void> _openDetails(BuildContext sheetContext, AppOrder order) async {
+    final strings = sheetContext.strings;
+    final scaffoldContext = context;
+    final dateLabel = DateFormat('dd MMMM, yyyy').format(order.date);
+    final startTimeLabel = order.startTime.format(context);
+    final dateTimeLabel = '$dateLabel • $startTimeLabel';
 
     await showModalBottomSheet(
-      context: context,
+      context: sheetContext,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
@@ -166,24 +201,10 @@ class _OrdersPageState extends State<OrdersPage>
                       ),
                     ),
                     const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.xs,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: AppRadii.pillRadius,
-                        color: theme.colorScheme.primary.withValues(
-                          alpha: 0.12,
-                        ),
-                      ),
-                      child: Text(
-                        order.id,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                    IconButton(
+                      tooltip: strings.tr('close'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
                     ),
                   ],
                 ),
@@ -202,18 +223,20 @@ class _OrdersPageState extends State<OrdersPage>
                 const SizedBox(height: AppSpacing.sm),
                 _DetailTile(
                   icon: Icons.calendar_today_rounded,
-                  title: date,
-                  subtitle: time,
+                  title: strings.tr('date'),
+                  subtitle: dateTimeLabel,
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                _DetailTile(
-                  icon: Icons.attach_money_rounded,
-                  title: strings.tr('price'),
-                  subtitle: NumberFormat.currency(
-                    symbol: 'so\'m',
-                    decimalDigits: 0,
-                  ).format(order.price),
-                ),
+                if (order.priceAvailable) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _DetailTile(
+                    icon: Icons.attach_money_rounded,
+                    title: strings.tr('price'),
+                    subtitle: NumberFormat.currency(
+                      symbol: 'so\'m ',
+                      decimalDigits: 0,
+                    ).format(order.price),
+                  ),
+                ],
                 if (order.driverName != null) ...[
                   const SizedBox(height: AppSpacing.sm),
                   _DetailTile(
@@ -248,20 +271,38 @@ class _OrdersPageState extends State<OrdersPage>
                           ),
                           const SizedBox(height: AppSpacing.md),
                           FilledButton.icon(
-                            onPressed: () {
+                            onPressed: () async {
                               Navigator.pop(context);
                               final reason = cancelReasonCtrl!.text.isEmpty
                                   ? strings.tr('cancelledByUser')
                                   : cancelReasonCtrl!.text;
-                              context.read<AppState>().cancelOrder(
-                                order.id,
-                                reason,
+                              final state = context.read<AppState>();
+                              final messenger = ScaffoldMessenger.of(
+                                scaffoldContext,
                               );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(strings.tr('orderCancelled')),
-                                ),
-                              );
+                              try {
+                                await state.cancelOrder(order.id, reason);
+                                if (!mounted) return;
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(strings.tr('orderCancelled')),
+                                  ),
+                                );
+                              } on ApiException catch (error) {
+                                if (!mounted) return;
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text(error.message)),
+                                );
+                              } catch (_) {
+                                if (!mounted) return;
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      strings.tr('unexpectedError'),
+                                    ),
+                                  ),
+                                );
+                              }
                             },
                             icon: const Icon(
                               Icons.cancel_schedule_send_rounded,
@@ -319,6 +360,45 @@ class _OrdersPageState extends State<OrdersPage>
       setState(() => currentTab = index);
     }
   }
+
+  void _drainUserRealtimeToasts(AppState state) {
+    final pending = <({String title, String message})>[];
+    while (true) {
+      final toast = state.takeNextUserRealtimeMessage();
+      if (toast == null) break;
+      pending.add(toast);
+    }
+    if (pending.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      for (final toast in pending) {
+        final text = toast.title.isEmpty
+            ? toast.message
+            : '${toast.title}: ${toast.message}';
+        messenger.showSnackBar(SnackBar(content: Text(text)));
+      }
+    });
+  }
+}
+
+class _OrdersViewportClipper extends CustomClipper<Rect> {
+  const _OrdersViewportClipper();
+
+  static const double _horizontalOverflowAllowance = 48;
+
+  @override
+  Rect getClip(Size size) {
+    return Rect.fromLTRB(
+      -_horizontalOverflowAllowance,
+      0,
+      size.width + _horizontalOverflowAllowance,
+      size.height,
+    );
+  }
+
+  @override
+  bool shouldReclip(covariant _OrdersViewportClipper oldClipper) => false;
 }
 
 class _OrdersParallaxPage extends StatelessWidget {
@@ -410,11 +490,6 @@ class _OrderCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -465,15 +540,16 @@ class _OrderCard extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    Text(
-                      NumberFormat.compactCurrency(
-                        symbol: 'so\'m',
-                        decimalDigits: 0,
-                      ).format(order.price),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                    if (order.priceAvailable)
+                      Text(
+                        NumberFormat.compactCurrency(
+                          symbol: 'so\'m ',
+                          decimalDigits: 0,
+                        ).format(order.price),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],

@@ -14,6 +14,11 @@ class RootShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
+        if (state.isBootstrapping) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
         final isAuthenticated = state.isAuthenticated;
         return AnimatedSwitcher(
           duration: AppDurations.medium,

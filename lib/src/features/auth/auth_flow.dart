@@ -82,13 +82,20 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
 
   // --- Actions ---
   Future<void> _handleLogin() async {
+    final strings = context.strings;
+    final phone = loginPhoneCtrl.text.trim();
+    final password = loginPasswordCtrl.text;
+    if (phone.isEmpty || password.isEmpty) {
+      _showSnack(strings.tr('fillAllFields'));
+      return;
+    }
     _unfocusAll();
     FocusScope.of(context).unfocus();
     setState(() => loading = true);
     try {
       await context.read<AppState>().login(
-        phone: loginPhoneCtrl.text.trim(),
-        password: loginPasswordCtrl.text,
+        phone: phone,
+        password: password,
       );
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -97,14 +104,29 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
       if (!mounted) return;
       _showSnack(context.strings.tr('unexpectedError'));
     } finally {
-      if (!mounted) return;
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
   Future<void> _handleRegister() async {
-    if (registerPasswordCtrl.text != registerConfirmCtrl.text) {
-      _showSnack(context.strings.tr('passwordMismatch'));
+    final strings = context.strings;
+    final phone = registerPhoneCtrl.text.trim();
+    final fullName = registerNameCtrl.text.trim();
+    final password = registerPasswordCtrl.text;
+    final confirm = registerConfirmCtrl.text;
+
+    if (phone.isEmpty ||
+        fullName.isEmpty ||
+        password.isEmpty ||
+        confirm.isEmpty) {
+      _showSnack(strings.tr('fillAllFields'));
+      return;
+    }
+
+    if (password != confirm) {
+      _showSnack(strings.tr('passwordMismatch'));
       return;
     }
 
@@ -113,10 +135,10 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
     setState(() => loading = true);
     try {
       await context.read<AppState>().register(
-        fullName: registerNameCtrl.text.trim(),
-        phone: registerPhoneCtrl.text.trim(),
-        password: registerPasswordCtrl.text,
-        confirmPassword: registerConfirmCtrl.text,
+        fullName: fullName,
+        phone: phone,
+        password: password,
+        confirmPassword: confirm,
       );
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -125,8 +147,9 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
       if (!mounted) return;
       _showSnack(context.strings.tr('unexpectedError'));
     } finally {
-      if (!mounted) return;
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -442,13 +465,13 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => _showSnack(strings.tr('passwordRecoveryMock')),
-            child: Text(strings.tr('forgotPassword')),
-          ),
-        ),
+        // Align(
+        //   alignment: Alignment.centerRight,
+        //   child: TextButton(
+        //     onPressed: () => _showSnack(strings.tr('passwordRecoveryMock')),
+        //     child: Text(strings.tr('forgotPassword')),
+        //   ),
+        // ),
         const SizedBox(height: AppSpacing.md),
         GradientButton(
           onPressed: loading ? null : _handleLogin,

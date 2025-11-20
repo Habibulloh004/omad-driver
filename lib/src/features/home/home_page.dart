@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../api/auth_api.dart';
 import '../../core/design_tokens.dart';
 import '../../localization/localization_ext.dart';
 import '../../models/order.dart';
@@ -10,7 +13,7 @@ import '../../widgets/glass_card.dart';
 import '../../widgets/glass_dialog.dart';
 import '../../widgets/gradient_button.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
     required this.onOrderTaxi,
@@ -23,19 +26,43 @@ class HomePage extends StatelessWidget {
   final VoidCallback onOpenNotifications;
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  late final ScrollController _activeOrdersController;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeOrdersController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _activeOrdersController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    _drainUserRealtimeToasts(state);
     final strings = context.strings;
     final user = state.currentUser;
     final activeOrders = state.activeOrders;
-    final historyOrders = state.historyOrders.take(6).toList();
+    final historyOrders = state.historyOrders.take(5).toList();
+    final hasUnreadNotifications = state.notifications.any(
+      (notification) => !notification.isRead,
+    );
+    final notificationSignal = state.notificationSignal;
     final mediaPadding = MediaQuery.of(context).padding;
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
+    final localizations = MaterialLocalizations.of(context);
     final highlightWidth = (size.width * 0.78)
         .clamp(260.0, size.width - AppSpacing.md * 2)
         .toDouble();
-    final highlightHeight = (size.height * 0.34).clamp(240.0, 320.0).toDouble();
 
     return Stack(
       children: [
@@ -65,7 +92,11 @@ class HomePage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
-                        _NotificationButton(onTap: onOpenNotifications),
+                        _NotificationButton(
+                          onTap: widget.onOpenNotifications,
+                          hasUnread: hasUnreadNotifications,
+                          activationToken: notificationSignal,
+                        ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -78,7 +109,17 @@ class HomePage extends StatelessWidget {
                             children: [
                               CircleAvatar(
                                 radius: 32,
-                                backgroundImage: NetworkImage(user.avatarUrl),
+                                backgroundImage: user.avatarUrl.isEmpty
+                                    ? null
+                                    : NetworkImage(user.avatarUrl),
+                                child: user.avatarUrl.isEmpty
+                                    ? Icon(
+                                        Icons.person_rounded,
+                                        size: 32,
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.6),
+                                      )
+                                    : null,
                               ),
                               const SizedBox(width: AppSpacing.lg),
                               Expanded(
@@ -144,12 +185,12 @@ class HomePage extends StatelessWidget {
                               const double horizontalGap = AppSpacing.lg;
                               const double verticalGap = AppSpacing.md;
                               final taxiButton = GradientButton(
-                                onPressed: onOrderTaxi,
+                                onPressed: widget.onOrderTaxi,
                                 label: strings.tr('orderTaxi'),
                                 icon: Icons.local_taxi_rounded,
                               );
                               final deliveryButton = GradientButton(
-                                onPressed: onSendDelivery,
+                                onPressed: widget.onSendDelivery,
                                 label: strings.tr('sendDelivery'),
                                 icon: Icons.delivery_dining_rounded,
                               );
@@ -177,35 +218,62 @@ class HomePage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      strings.tr('activeOrders'),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            strings.tr('activeOrders'),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (activeOrders.isNotEmpty) ...[
+                          _ActiveOrdersPagerButton(
+                            icon: Icons.chevron_left_rounded,
+                            tooltip: localizations.previousPageTooltip,
+                            onPressed: () => _animateActiveOrdersScroll(
+                              forward: false,
+                              step: highlightWidth + AppSpacing.md,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          _ActiveOrdersPagerButton(
+                            icon: Icons.chevron_right_rounded,
+                            tooltip: localizations.nextPageTooltip,
+                            onPressed: () => _animateActiveOrdersScroll(
+                              forward: true,
+                              step: highlightWidth + AppSpacing.md,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      height: highlightHeight,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: activeOrders.isEmpty
-                            ? 1
-                            : activeOrders.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: AppSpacing.md),
-                        itemBuilder: (context, index) {
-                          if (activeOrders.isEmpty) {
-                            return _EmptyCard(
+                    SingleChildScrollView(
+                      controller: _activeOrdersController,
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      clipBehavior: Clip.none,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.xxs,
+                      ),
+                      child: Row(
+                        children: [
+                          if (activeOrders.isEmpty)
+                            _EmptyCard(
                               width: highlightWidth,
                               message: strings.tr('noActiveOrders'),
-                            );
-                          }
-                          final order = activeOrders[index];
-                          return _OrderHighlightCard(
-                            order: order,
-                            width: highlightWidth,
-                          );
-                        },
+                            )
+                          else
+                            for (var i = 0; i < activeOrders.length; i++) ...[
+                              if (i != 0) const SizedBox(width: AppSpacing.md),
+                              _OrderHighlightCard(
+                                order: activeOrders[i],
+                                width: highlightWidth,
+                              ),
+                            ],
+                        ],
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -245,6 +313,45 @@ class HomePage extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  void _animateActiveOrdersScroll({
+    required bool forward,
+    required double step,
+  }) {
+    final controller = _activeOrdersController;
+    if (!controller.hasClients) return;
+    final minExtent = controller.position.minScrollExtent;
+    final maxExtent = controller.position.maxScrollExtent;
+    final target = (controller.offset + (forward ? step : -step)).clamp(
+      minExtent,
+      maxExtent,
+    );
+    controller.animateTo(
+      target,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _drainUserRealtimeToasts(AppState state) {
+    final pending = <({String title, String message})>[];
+    while (true) {
+      final toast = state.takeNextUserRealtimeMessage();
+      if (toast == null) break;
+      pending.add(toast);
+    }
+    if (pending.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      for (final toast in pending) {
+        final text = toast.title.isEmpty
+            ? toast.message
+            : '${toast.title}: ${toast.message}';
+        messenger.showSnackBar(SnackBar(content: Text(text)));
+      }
+    });
   }
 
   Future<void> _showChangePassword(BuildContext context) async {
@@ -294,11 +401,38 @@ class HomePage extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               GradientButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(strings.tr('passwordUpdated'))),
-                  );
+                onPressed: () async {
+                  if (newCtrl.text != confirmCtrl.text) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(strings.tr('passwordMismatch'))),
+                    );
+                    return;
+                  }
+                  final state = context.read<AppState>();
+                  try {
+                    await state.changePassword(
+                      oldPassword: oldCtrl.text,
+                      newPassword: newCtrl.text,
+                      confirmPassword: confirmCtrl.text,
+                    );
+                    if (!context.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(strings.tr('passwordUpdated'))),
+                    );
+                  } on ApiException catch (error) {
+                    if (!context.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(error.message)));
+                  } catch (_) {
+                    if (!context.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(strings.tr('unexpectedError'))),
+                    );
+                  }
                 },
                 label: strings.tr('save'),
                 icon: Icons.lock_reset_rounded,
@@ -311,19 +445,68 @@ class HomePage extends StatelessWidget {
   }
 }
 
-class _NotificationButton extends StatelessWidget {
-  const _NotificationButton({required this.onTap});
+class _NotificationButton extends StatefulWidget {
+  const _NotificationButton({
+    required this.onTap,
+    required this.hasUnread,
+    required this.activationToken,
+  });
 
   final VoidCallback onTap;
+  final bool hasUnread;
+  final int activationToken;
+
+  @override
+  State<_NotificationButton> createState() => _NotificationButtonState();
+}
+
+class _NotificationButtonState extends State<_NotificationButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    );
+    if (widget.hasUnread) {
+      _startAlarmCycle(force: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _NotificationButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.hasUnread) {
+      if (oldWidget.hasUnread) {
+        _controller
+          ..stop()
+          ..reset();
+      }
+      return;
+    }
+    final tokenChanged = widget.activationToken != oldWidget.activationToken;
+    final becameUnread = widget.hasUnread && !oldWidget.hasUnread;
+    if (tokenChanged || becameUnread) {
+      _startAlarmCycle(force: true);
+    } else if (!_controller.isAnimating) {
+      _startAlarmCycle(force: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final gradient = LinearGradient(
-      colors: [
-        theme.colorScheme.primary,
-        theme.colorScheme.secondary,
-      ],
+      colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
     );
 
     return DecoratedBox(
@@ -339,19 +522,55 @@ class _NotificationButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: AppRadii.buttonRadius,
-          onTap: onTap,
+          onTap: widget.onTap,
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.sm),
-            child: Icon(
-              Icons.notifications_active_rounded,
-              color: theme.colorScheme.onPrimary,
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                final t = widget.hasUnread ? _controller.value : 0.0;
+                final angle = _alarmAngle(t);
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [Transform.rotate(angle: angle, child: child)],
+                );
+              },
+              child: Icon(
+                Icons.notifications_active_rounded,
+                color: theme.colorScheme.onPrimary,
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  void _startAlarmCycle({required bool force}) {
+    if (!widget.hasUnread) return;
+    if (_controller.isAnimating || _controller.value != 0) {
+      _controller
+        ..stop()
+        ..reset();
+    }
+    _controller.repeat();
+  }
+
+  double _alarmAngle(double t) {
+    if (t <= 0) return 0;
+    const ringPortion = 0.35; // ~1s of shaking, then ~2s rest
+    final local = t % 1;
+    if (local >= ringPortion) return 0;
+
+    final progress = (local / ringPortion).clamp(0.0, 1.0);
+    final oscillations = 6.0;
+    final envelope = Curves.easeOutQuad.transform(1 - progress);
+    final maxTilt = 0.42;
+    final minTilt = 0.18;
+    final tilt = maxTilt - (maxTilt - minTilt) * progress;
+    return math.sin(progress * oscillations * math.pi * 2) * tilt * envelope;
   }
 }
 
@@ -373,6 +592,39 @@ class _SectionDivider extends StatelessWidget {
         ),
       ),
       child: const SizedBox(height: 1),
+    );
+  }
+}
+
+class _ActiveOrdersPagerButton extends StatelessWidget {
+  const _ActiveOrdersPagerButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(icon, color: theme.colorScheme.primary),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -429,11 +681,6 @@ class _OrderHighlightCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Spacer(),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
@@ -488,11 +735,6 @@ class _OrderHighlightCard extends StatelessWidget {
                   value: dateFormatter.format(order.date),
                 ),
                 _MetaInfo(
-                  icon: Icons.timelapse_rounded,
-                  value:
-                      '${order.startTime.format(context)} - ${order.endTime.format(context)}',
-                ),
-                _MetaInfo(
                   icon: Icons.people_alt_rounded,
                   value: '${order.passengers}',
                 ),
@@ -501,16 +743,17 @@ class _OrderHighlightCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
-                Text(
-                  NumberFormat.currency(
-                    locale: 'uz_UZ',
-                    symbol: 'so\'m',
-                    decimalDigits: 0,
-                  ).format(order.price),
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+                if (order.priceAvailable)
+                  Text(
+                    NumberFormat.currency(
+                      locale: 'uz_UZ',
+                      symbol: 'so\'m ',
+                      decimalDigits: 0,
+                    ).format(order.price),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
                 const Spacer(),
                 _StatusChip(status: order.status),
               ],
@@ -572,9 +815,6 @@ class _OrderListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time =
-        '${order.startTime.format(context)} - ${order.endTime.format(context)}';
-
     return GlassCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Row(
@@ -607,8 +847,6 @@ class _OrderListTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(time, style: Theme.of(context).textTheme.bodyMedium),
               ],
             ),
           ),

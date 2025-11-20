@@ -14,6 +14,9 @@ class AppTextField extends StatelessWidget {
     this.maxLines = 1,
     this.minLines,
     this.prefixIcon,
+    this.hintText,
+    this.showLabel = true,
+    this.floatingLabelBehavior,
   });
 
   final TextEditingController controller;
@@ -27,10 +30,16 @@ class AppTextField extends StatelessWidget {
   final int? minLines;
   final int maxLines;
   final IconData? prefixIcon;
+  final String? hintText;
+  final bool showLabel;
+  final FloatingLabelBehavior? floatingLabelBehavior;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isMultiline = (minLines ?? maxLines) > 1 || maxLines > 1;
+    final hasLabel = showLabel && label.isNotEmpty;
+    final resolvedHint = hintText ?? (hasLabel ? null : label);
     return TextField(
       controller: controller,
       focusNode: focusNode,
@@ -40,8 +49,17 @@ class AppTextField extends StatelessWidget {
       readOnly: readOnly,
       minLines: minLines,
       maxLines: maxLines,
+      textAlignVertical:
+          isMultiline ? TextAlignVertical.top : TextAlignVertical.center,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: hasLabel ? label : null,
+        hintText: resolvedHint,
+        floatingLabelBehavior: floatingLabelBehavior ??
+            (hasLabel ? FloatingLabelBehavior.auto : FloatingLabelBehavior.never),
+        alignLabelWithHint: isMultiline,
+        contentPadding: isMultiline
+            ? const EdgeInsets.fromLTRB(16, 18, 16, 18)
+            : const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
         prefixIcon: prefixIcon != null
             ? Icon(prefixIcon, color: theme.colorScheme.primary)
             : null,
