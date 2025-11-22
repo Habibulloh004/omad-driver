@@ -49,5 +49,10 @@
 	<string>This app needs your location to select accurate pickup points.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Location access lets us show your current pickup point on the map.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>telprompt</string>
+	</array>
 </dict>
 </plist>

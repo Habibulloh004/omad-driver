@@ -64,6 +64,7 @@ class AppLocalizations {
       'passwordUpdated': 'Parol muvaffaqiyatli yangilandi',
       'save': 'Saqlash',
       'refresh': 'Yangilash',
+      'more': 'Ko‘proq',
       'notifications': 'Bildirishnomalar',
       'homeGreeting': 'Assalomu alaykum!',
       'ratingWithValue': 'Reyting: {rating}',
@@ -207,6 +208,8 @@ class AppLocalizations {
       'callPassengerHint':
           'Qabul qilishdan oldin 15 daqiqa ichida yo‘lovchi bilan bog‘laning.',
       'callPassengerUnavailable': 'Telefon raqami mavjud emas.',
+      'copyNumber': 'Raqamni nusxalash',
+      'copied': 'Nusxalandi',
       'releaseOrder': 'Buyurtmani rad etish',
       'orderReleaseSuccess': 'Buyurtma boshqa haydovchilarga ochildi.',
       'orderHoldMessage':
@@ -250,6 +253,7 @@ class AppLocalizations {
       'passwordUpdated': 'Парол муваффақиятли янгиланди',
       'save': 'Сақлаш',
       'refresh': 'Янгилаш',
+      'more': 'Кўпроқ',
       'notifications': 'Билдиришномалар',
       'homeGreeting': 'Ассалому алайкум!',
       'ratingWithValue': 'Рейтинг: {rating}',
@@ -393,6 +397,8 @@ class AppLocalizations {
       'callPassengerHint':
           'Қабул қилишдан олдин 15 дақиқа ичида мижоз билан боғланинг.',
       'callPassengerUnavailable': 'Телефон рақами мавжуд эмас.',
+      'copyNumber': 'Рақамни нусхалаш',
+      'copied': 'Нусхаланди',
       'releaseOrder': 'Буюртмани рад этиш',
       'orderReleaseSuccess': 'Буюртма яна бошқа ҳайдовчиларга очилди.',
       'orderHoldMessage':
@@ -433,6 +439,7 @@ class AppLocalizations {
       'passwordUpdated': 'Пароль успешно обновлён',
       'save': 'Сохранить',
       'refresh': 'Обновить',
+      'more': 'Еще',
       'notifications': 'Уведомления',
       'homeGreeting': 'Добро пожаловать!',
       'ratingWithValue': 'Рейтинг: {rating}',
@@ -575,6 +582,8 @@ class AppLocalizations {
       'callPassengerHint':
           'Вы можете связаться с пассажиром в течение 15 минут перед принятием заказа.',
       'callPassengerUnavailable': 'Номер недоступен.',
+      'copyNumber': 'Скопировать номер',
+      'copied': 'Скопировано',
       'releaseOrder': 'Отказаться от заказа',
       'orderReleaseSuccess': 'Заказ вновь доступен другим водителям.',
       'orderHoldMessage':

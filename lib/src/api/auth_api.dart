@@ -177,6 +177,8 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> fetchUserOrders({
     String? status,
     String? type,
+    int? limit,
+    int? offset,
   }) async {
     final futures = <Future<List<Map<String, dynamic>>>>[];
     final normalizedType = type?.toLowerCase() == 'all'
@@ -185,7 +187,13 @@ class ApiClient {
 
     if (normalizedType == null || normalizedType == 'taxi') {
       futures.add(
-        _fetchOrders(path: '/taxi-orders/', orderType: 'taxi', status: status),
+        _fetchOrders(
+          path: '/taxi-orders/',
+          orderType: 'taxi',
+          status: status,
+          limit: limit,
+          offset: offset,
+        ),
       );
     }
     if (normalizedType == null || normalizedType == 'delivery') {
@@ -194,6 +202,8 @@ class ApiClient {
           path: '/delivery-orders/',
           orderType: 'delivery',
           status: status,
+          limit: limit,
+          offset: offset,
         ),
       );
     }
@@ -220,12 +230,20 @@ class ApiClient {
     required String path,
     required String orderType,
     String? status,
+    int? limit,
+    int? offset,
   }) async {
+    final query = <String, dynamic>{};
+    if (status != null) {
+      query['status_filter'] = status;
+    }
+    if (limit != null) query['limit'] = limit;
+    if (offset != null) query['offset'] = offset;
     final response = await _request(
       'GET',
       path,
       authorized: true,
-      query: status == null ? null : {'status_filter': status},
+      query: query.isEmpty ? null : query,
     );
     final data = _ensureListOfMaps(response);
     return data
@@ -334,6 +352,8 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchDriverNewOrders({
     int? fromRegionId,
     int? toRegionId,
+    int? limit,
+    int? offset,
   }) async {
     final query = <String, dynamic>{};
     if (fromRegionId != null) {
@@ -342,6 +362,8 @@ class ApiClient {
     if (toRegionId != null) {
       query['to_region_id'] = toRegionId;
     }
+    if (limit != null) query['limit'] = limit;
+    if (offset != null) query['offset'] = offset;
     final response = await _request(
       'GET',
       '/driver/orders/new',
@@ -351,23 +373,42 @@ class ApiClient {
     return _ensureMap(response);
   }
 
-  Future<Map<String, dynamic>> fetchDriverActiveOrders() async {
+  Future<Map<String, dynamic>> fetchDriverActiveOrders({
+    int? fromRegionId,
+    int? toRegionId,
+    int? limit,
+    int? offset,
+  }) async {
+    final query = <String, dynamic>{};
+    if (fromRegionId != null) {
+      query['from_region_id'] = fromRegionId;
+    }
+    if (toRegionId != null) {
+      query['to_region_id'] = toRegionId;
+    }
+    if (limit != null) query['limit'] = limit;
+    if (offset != null) query['offset'] = offset;
     final response = await _request(
       'GET',
       '/driver/orders/active',
       authorized: true,
+      query: query.isEmpty ? null : query,
     );
     return _ensureMap(response);
   }
 
   Future<Map<String, dynamic>> fetchDriverAssignedOrders({
     String? status,
+    int? limit,
+    int? offset,
   }) async {
     final query = <String, dynamic>{};
     final normalized = status?.trim();
     if (normalized != null && normalized.isNotEmpty) {
       query['status_filter'] = normalized;
     }
+    if (limit != null) query['limit'] = limit;
+    if (offset != null) query['offset'] = offset;
     final response = await _request(
       'GET',
       '/driver/orders/my-orders',

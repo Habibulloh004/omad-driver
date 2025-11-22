@@ -1,14 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/auth_api.dart';
 import '../../localization/localization_ext.dart';
 import '../../models/order.dart';
 import '../../state/app_state.dart';
+import 'driver_order_history_page.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
 
@@ -23,6 +25,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
   static const Duration _autoRefreshInterval = Duration(minutes: 10);
   Timer? _profileRefreshTimer;
   bool _isProfileRefreshing = false;
+  bool _isPagingOrders = false;
 
   @override
   void initState() {
@@ -56,7 +59,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
       final holdActive = state.isDriverOrderPreviewActive(order.id);
       return viewers == 0 || holdActive;
     }).toList();
-    final activeOrders = state.driverActiveOrders;
+    final activeOrders = state.driverActiveOrders
+        .where((order) => order.status == OrderStatus.active)
+        .toList();
     final loading = state.isDriverContextLoading;
     final totalToday = stats?.dailyRevenue ?? 0;
     final todayCount = stats?.dailyOrders ?? 0;
@@ -197,32 +202,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
               ],
             ),
             const SizedBox(height: 32),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.local_taxi_rounded),
-                  label: Text(strings.tr('newTaxiOrders')),
-                  onPressed: () => _showPendingByType(context, OrderType.taxi),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.history_rounded),
+                label: Text(strings.tr('orderHistory')),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const DriverOrderHistoryPage(),
+                  ),
                 ),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.inventory_2_rounded),
-                  label: Text(strings.tr('newDeliveryOrders')),
-                  onPressed: () =>
-                      _showPendingByType(context, OrderType.delivery),
-                ),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.directions_car_filled_rounded),
-                  label: Text(strings.tr('activeOrders')),
-                  onPressed: () => _showActive(context),
-                ),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.history_rounded),
-                  label: Text(strings.tr('orderHistory')),
-                  onPressed: () => _showHistory(context),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 32),
             Text(
@@ -255,6 +245,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     )
                     .toList(),
               ),
+            if (state.driverAvailableOrders.length >= 20 ||
+                state.driverAvailableHasMore)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 4),
+                child: Center(
+                  child: ElevatedButton(
+                    onPressed: _loadMoreDriverOrders,
+                    child: Text(strings.tr('more')),
+                  ),
+                ),
+              ),
             const SizedBox(height: 32),
             Text(
               strings.tr('activeOrders'),
@@ -262,6 +263,14 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
+            if (state.driverActiveOrders.length >= 20 ||
+                state.driverActiveHasMore)
+              Center(
+                child: ElevatedButton(
+                  onPressed: _loadMoreDriverOrders,
+                  child: Text(strings.tr('more')),
+                ),
+              ),
             const SizedBox(height: 12),
             if (activeOrders.isEmpty)
               GlassCard(
@@ -285,6 +294,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
                       ),
                     )
                     .toList(),
+              ),
+            if (state.isLoadingMoreDriverAvailable ||
+                state.isLoadingMoreDriverActive)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: CircularProgressIndicator()),
               ),
             const SizedBox(height: 32),
           ],
@@ -330,184 +345,22 @@ class _DriverDashboardState extends State<DriverDashboard> {
     }
   }
 
-  void _showHistory(BuildContext context) {
-    final strings = context.strings;
+  Future<void> _loadMoreDriverOrders() async {
+    if (_isPagingOrders) return;
     final state = context.read<AppState>();
-    final completed = state.driverCompletedOrders;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
-          child: GlassCard(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  strings.tr('completedOrders'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 16),
-                if (completed.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: Text(strings.tr('noHistory'))),
-                  )
-                else
-                  ...completed.map(
-                    (order) => ListTile(
-                      leading: Icon(
-                        order.isTaxi
-                            ? Icons.local_taxi_rounded
-                            : Icons.inventory_2_rounded,
-                      ),
-                      title: Text(
-                        '${order.fromDistrict} → ${order.toDistrict}',
-                      ),
-                      subtitle: order.priceAvailable
-                          ? Text(
-                              NumberFormat.currency(
-                                symbol: 'so\'m ',
-                                decimalDigits: 0,
-                              ).format(order.price),
-                            )
-                          : null,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showPendingByType(BuildContext context, OrderType type) {
-    final strings = context.strings;
-    final state = context.read<AppState>();
-    final items = state.driverAvailableOrders.where((order) {
-      if (order.type != type) return false;
-      final viewers = state.driverOrderViewerCount(order.id);
-      final holdActive = state.isDriverOrderPreviewActive(order.id);
-      return viewers == 0 || holdActive;
-    }).toList();
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
-          child: GlassCard(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  type == OrderType.taxi
-                      ? strings.tr('newTaxiOrders')
-                      : strings.tr('newDeliveryOrders'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 16),
-                if (items.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: Text(strings.tr('noPendingOrders'))),
-                  )
-                else
-                  ...items.map(
-                    (order) => ListTile(
-                      leading: Icon(
-                        order.isTaxi
-                            ? Icons.local_taxi_rounded
-                            : Icons.inventory_2_rounded,
-                      ),
-                      title: Text(
-                        '${order.fromDistrict} → ${order.toDistrict}',
-                      ),
-                      subtitle: order.priceAvailable
-                          ? Text(
-                              NumberFormat.currency(
-                                symbol: 'so\'m ',
-                                decimalDigits: 0,
-                              ).format(order.price),
-                            )
-                          : null,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showActive(BuildContext context) {
-    final strings = context.strings;
-    final state = context.read<AppState>();
-    final items = state.driverActiveOrders;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
-          child: GlassCard(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  strings.tr('activeOrders'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 16),
-                if (items.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text(strings.tr('noActiveDriverOrders')),
-                    ),
-                  )
-                else
-                  ...items.map(
-                    (order) => ListTile(
-                      leading: Icon(
-                        order.isTaxi
-                            ? Icons.local_taxi_rounded
-                            : Icons.inventory_2_rounded,
-                      ),
-                      title: Text(
-                        '${order.fromDistrict} → ${order.toDistrict}',
-                      ),
-                      subtitle: order.priceAvailable
-                          ? Text(
-                              NumberFormat.currency(
-                                symbol: 'so\'m ',
-                                decimalDigits: 0,
-                              ).format(order.price),
-                            )
-                          : null,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    final loading =
+        state.isLoadingMoreDriverAvailable || state.isLoadingMoreDriverActive;
+    final hasMore = state.driverAvailableHasMore || state.driverActiveHasMore;
+    if (!hasMore || loading) return;
+    _isPagingOrders = true;
+    try {
+      await Future.wait([
+        state.loadMoreDriverAvailableOrders(),
+        state.loadMoreDriverActiveOrders(),
+      ]);
+    } finally {
+      _isPagingOrders = false;
+    }
   }
 
   void _drainDriverRealtimeToasts(AppState state) {
@@ -541,11 +394,6 @@ class _PendingOrderTile extends StatelessWidget {
     final strings = context.strings;
     final theme = Theme.of(context);
     final state = context.watch<AppState>();
-    final startTimeLabel = order.startTime.format(context);
-    final endTimeLabel = order.endTime.format(context);
-    final timeLabel = startTimeLabel == endTimeLabel
-        ? startTimeLabel
-        : '$startTimeLabel - $endTimeLabel';
     final viewerCount = state.driverOrderViewerCount(order.id);
     final expiresAt = state.driverOrderPreviewExpiresAt(order.id);
     final holdActive = state.isDriverOrderPreviewActive(order.id);
@@ -569,17 +417,23 @@ class _PendingOrderTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           onTap: () => _showDetails(context),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Chip(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      visualDensity: VisualDensity.compact,
                       avatar: Icon(
                         order.isTaxi
                             ? Icons.local_taxi_rounded
                             : Icons.inventory_2_rounded,
+                        size: 18,
                       ),
                       label: Text(
                         order.isTaxi
@@ -588,22 +442,38 @@ class _PendingOrderTile extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    Text(order.id),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '#${order.id}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text(
-                  '${order.fromDistrict} → ${order.toDistrict}',
+                  '${_formatRegionDistrict(order.fromRegion, order.fromDistrict)} → ${_formatRegionDistrict(order.toRegion, order.toDistrict)}',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
-                Text(timeLabel),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 10,
+                  runSpacing: 10,
                   children: [
                     _InfoChip(
                       icon: Icons.group_rounded,
@@ -626,10 +496,17 @@ class _PendingOrderTile extends StatelessWidget {
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                    ),
                     onPressed: () => _showDetails(context),
                     icon: const Icon(Icons.open_in_new_rounded),
                     label: Text(strings.tr('viewOrderDetails')),
@@ -667,7 +544,22 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(avatar: Icon(icon, size: 18), label: Text(label));
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    return Chip(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      side: BorderSide(color: primary.withOpacity(0.08)),
+      backgroundColor: primary.withOpacity(0.06),
+      avatar: Icon(icon, size: 16, color: primary),
+      label: Text(
+        label,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }
 
@@ -698,13 +590,17 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
         children: [
           Row(
             children: [
-              Text(
-                '${order.fromDistrict} → ${order.toDistrict}',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              Expanded(
+                child: Text(
+                  '${_formatRegionDistrict(order.fromRegion, order.fromDistrict)} → ${_formatRegionDistrict(order.toRegion, order.toDistrict)}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Text(order.id),
             ],
           ),
@@ -812,6 +708,7 @@ class _DriverOrderDetailSheet extends StatefulWidget {
 }
 
 class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
+  late AppOrder _order;
   Timer? _timer;
   Duration? _remaining;
   bool _expired = false;
@@ -823,6 +720,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
   @override
   void initState() {
     super.initState();
+    _order = widget.order;
     final state = context.read<AppState>();
     state.beginDriverOrderPreview(widget.order);
     _remaining = _remainingFrom(
@@ -830,13 +728,14 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     );
     _expired = _remaining == Duration.zero;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    _loadDetails();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     if (!_stopSent) {
-      context.read<AppState>().endDriverOrderPreview(widget.order);
+      context.read<AppState>().endDriverOrderPreview(_order);
       _stopSent = true;
     }
     super.dispose();
@@ -846,7 +745,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     if (!mounted) return;
     final state = context.read<AppState>();
     final remaining = _remainingFrom(
-      state.driverOrderPreviewExpiresAt(widget.order.id),
+      state.driverOrderPreviewExpiresAt(_order.id),
     );
     final expired = remaining <= Duration.zero;
     if (expired && !_holdReleased) {
@@ -868,9 +767,20 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     return diff.isNegative ? Duration.zero : diff;
   }
 
+  Future<void> _loadDetails() async {
+    final fetched = await context.read<AppState>().loadDriverOrderDetail(
+      _order,
+    );
+    if (fetched != null && mounted) {
+      setState(() {
+        _order = fetched;
+      });
+    }
+  }
+
   void _sendStopViewing({bool releaseHold = false, String? reason}) {
     context.read<AppState>().endDriverOrderPreview(
-      widget.order,
+      _order,
       releaseHold: releaseHold,
       reason: reason,
     );
@@ -888,7 +798,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     final navigator = Navigator.of(context);
     try {
       final state = context.read<AppState>();
-      await state.acceptDriverOrder(widget.order);
+      await state.acceptDriverOrder(_order);
       if (!mounted) return;
       _stopSent = true;
       _holdReleased = true;
@@ -927,25 +837,13 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
 
   Future<void> _callPassenger(BuildContext context) async {
     if (_expired || _holdReleased) return;
+    final phone = _order.customerPhone?.trim();
+    if (phone == null || phone.isEmpty) return;
     final strings = context.strings;
     final messenger = ScaffoldMessenger.of(context);
-    final phone = widget.order.customerPhone?.trim() ?? '';
-    if (phone.isEmpty) return;
-    final normalized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    if (normalized.isEmpty) return;
-    final uri = Uri(scheme: 'tel', path: normalized);
-    try {
-      final success = await launchUrl(uri);
-      if (!success) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(strings.tr('unexpectedError'))),
-        );
-      }
-    } catch (_) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(strings.tr('unexpectedError'))),
-      );
-    }
+    await Clipboard.setData(ClipboardData(text: phone));
+    if (!mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(strings.tr('copied'))));
   }
 
   String _formatRemaining() {
@@ -964,8 +862,9 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     final strings = context.strings;
     final theme = Theme.of(context);
     final state = context.watch<AppState>();
-    final viewerCount = state.driverOrderViewerCount(widget.order.id);
-    final expiresAt = state.driverOrderPreviewExpiresAt(widget.order.id);
+    final order = _order;
+    final viewerCount = state.driverOrderViewerCount(order.id);
+    final expiresAt = state.driverOrderPreviewExpiresAt(order.id);
     final holdWindow = state.driverOrderPreviewWindow;
     final totalSeconds = holdWindow.inSeconds;
     final rawSeconds = (_remaining ?? Duration.zero).inSeconds;
@@ -975,32 +874,32 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     final progress = totalSeconds == 0
         ? 1.0
         : 1 - (clampedSeconds.toDouble() / totalSeconds.toDouble());
-    final startLabel = widget.order.startTime.format(context);
-    final endLabel = widget.order.endTime.format(context);
+    final startLabel = _formatTimeOfDay(order.startTime);
+    final endLabel = _formatTimeOfDay(order.endTime);
     final timeLabel = startLabel == endLabel
         ? startLabel
         : '$startLabel - $endLabel';
     final hasExplicitTime =
-        !(widget.order.startTime.hour == 0 &&
-            widget.order.startTime.minute == 0 &&
-            widget.order.endTime == widget.order.startTime);
+        !(order.startTime.hour == 0 &&
+            order.startTime.minute == 0 &&
+            order.endTime == order.startTime);
     final String? scheduleLabel = hasExplicitTime ? timeLabel : null;
-    final priceLabel = widget.order.priceAvailable
+    final priceLabel = order.priceAvailable
         ? NumberFormat.currency(
             symbol: 'so\'m ',
             decimalDigits: 0,
-          ).format(widget.order.price)
+          ).format(order.price)
         : strings.tr('priceUnspecified');
     final passengersLabel = strings
         .tr('passengersCount')
-        .replaceFirst('{count}', widget.order.passengers.toString());
+        .replaceFirst('{count}', order.passengers.toString());
     final reservedLabel = !_expired && expiresAt != null
         ? strings
               .tr('reservedUntil')
               .replaceFirst('{time}', DateFormat.Hm().format(expiresAt))
         : strings.tr('orderHoldExpiredInfo');
-    final note = widget.order.note?.trim();
-    final phone = widget.order.customerPhone?.trim() ?? '';
+    final note = order.note?.trim();
+    final phone = order.customerPhone?.trim() ?? '';
     final hasPhone = phone.isNotEmpty;
     final canCall = hasPhone && !_expired && !_holdReleased;
 
@@ -1017,7 +916,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                   children: [
                     Expanded(
                       child: Text(
-                        widget.order.isTaxi
+                        order.isTaxi
                             ? strings.tr('taxiOrder')
                             : strings.tr('deliveryOrder'),
                         style: theme.textTheme.titleLarge?.copyWith(
@@ -1033,7 +932,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${widget.order.fromDistrict} → ${widget.order.toDistrict}',
+                  '${_formatRegionDistrict(order.fromRegion, order.fromDistrict)} → ${_formatRegionDistrict(order.toRegion, order.toDistrict)}',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1068,7 +967,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                   context,
                   icon: Icons.calendar_today_rounded,
                   label: strings.tr('date'),
-                  value: DateFormat.yMMMMd().format(widget.order.date),
+                  value: DateFormat.yMMMMd().format(order.date),
                 ),
                 if (scheduleLabel != null)
                   _buildInfoRow(
@@ -1148,8 +1047,8 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                         onPressed: canCall
                             ? () => _callPassenger(context)
                             : null,
-                        icon: const Icon(Icons.call_rounded),
-                        label: Text(strings.tr('callPassenger')),
+                        icon: const Icon(Icons.copy_rounded),
+                        label: Text(strings.tr('copyNumber')),
                       ),
                     ],
                   ),
@@ -1236,4 +1135,20 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
       ),
     );
   }
+}
+
+String _formatRegionDistrict(String region, String district) {
+  final regionLabel = region.trim();
+  final districtLabel = district.trim();
+  if (districtLabel.isEmpty ||
+      districtLabel.toLowerCase() == regionLabel.toLowerCase()) {
+    return regionLabel;
+  }
+  return '$regionLabel, $districtLabel';
+}
+
+String _formatTimeOfDay(TimeOfDay time) {
+  final hour = time.hour.toString().padLeft(2, '0');
+  final minute = time.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }

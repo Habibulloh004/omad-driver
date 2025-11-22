@@ -24,6 +24,7 @@ class SessionStorage {
   static const _tokenKey = 'session_token';
   static const _userKey = 'session_user';
   static const _savedAtKey = 'session_saved_at';
+  static const _driverPreviewAnchorsKey = 'driver_preview_anchors';
 
   static Future<SessionStorage> getInstance() async {
     final prefs = await SharedPreferences.getInstance();
@@ -76,6 +77,37 @@ class SessionStorage {
       _prefs.remove(_tokenKey),
       _prefs.remove(_userKey),
       _prefs.remove(_savedAtKey),
+      _prefs.remove(_driverPreviewAnchorsKey),
     ]);
+  }
+
+  Future<void> saveDriverPreviewAnchors(Map<String, DateTime> anchors) async {
+    if (anchors.isEmpty) {
+      await _prefs.remove(_driverPreviewAnchorsKey);
+      return;
+    }
+    final encoded = anchors.map(
+      (key, value) => MapEntry(key, value.toIso8601String()),
+    );
+    await _prefs.setString(_driverPreviewAnchorsKey, jsonEncode(encoded));
+  }
+
+  Future<Map<String, DateTime>> readDriverPreviewAnchors() async {
+    final raw = _prefs.getString(_driverPreviewAnchorsKey);
+    if (raw == null || raw.isEmpty) return <String, DateTime>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return <String, DateTime>{};
+      final parsed = <String, DateTime>{};
+      decoded.forEach((key, value) {
+        if (key is! String) return;
+        final iso = value?.toString() ?? '';
+        final ts = DateTime.tryParse(iso);
+        if (ts != null) parsed[key] = ts;
+      });
+      return parsed;
+    } catch (_) {
+      return <String, DateTime>{};
+    }
   }
 }

@@ -50,7 +50,7 @@ class _HomePageState extends State<HomePage> {
     _drainUserRealtimeToasts(state);
     final strings = context.strings;
     final user = state.currentUser;
-    final activeOrders = state.activeOrders;
+    final activeOrders = state.activeOrders.take(20).toList();
     final historyOrders = state.historyOrders.take(5).toList();
     final hasUnreadNotifications = state.notifications.any(
       (notification) => !notification.isRead,

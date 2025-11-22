@@ -34,12 +34,15 @@ class AppState extends ChangeNotifier {
   static const Duration _sessionTTL = Duration(days: 7);
   static const Duration _driverOrderPreviewWindow = Duration(minutes: 15);
   static const Duration _serverTimeOffset = Duration(hours: 5);
+  static const int _ordersPageSize = 20;
+  static const int _driverOrdersPageSize = 10;
   static const Set<String> _driverEligibleRoles = {
     'driver',
     'admin',
     'superadmin',
   };
   static const String _uploadsOrigin = backendBaseUrl;
+  static const bool _notificationsMuted = true;
 
   final ApiClient _api;
   final RealtimeGateway _realtime;
@@ -47,6 +50,11 @@ class AppState extends ChangeNotifier {
 
   AppUser _currentUser = AppUser.empty();
   List<AppOrder> _orders = <AppOrder>[];
+  int _taxiOrdersOffset = 0;
+  int _deliveryOrdersOffset = 0;
+  bool _taxiOrdersHasMore = true;
+  bool _deliveryOrdersHasMore = true;
+  bool _ordersLoadingMore = false;
   List<AppNotification> _notifications = <AppNotification>[];
   List<RegionModel> _regions = <RegionModel>[];
   final Map<int, RegionModel> _regionById = <int, RegionModel>{};
@@ -55,6 +63,15 @@ class AppState extends ChangeNotifier {
   List<AppOrder> _driverAvailableOrders = <AppOrder>[];
   List<AppOrder> _driverActiveOrders = <AppOrder>[];
   List<AppOrder> _driverCompletedOrders = <AppOrder>[];
+  int _driverAvailableOffset = 0;
+  int _driverActiveOffset = 0;
+  int _driverCompletedOffset = 0;
+  bool _driverAvailableHasMore = true;
+  bool _driverActiveHasMore = true;
+  bool _driverCompletedHasMore = true;
+  bool _driverAvailableLoadingMore = false;
+  bool _driverActiveLoadingMore = false;
+  bool _driverCompletedLoadingMore = false;
   DriverStats? _driverStats;
   DriverProfile? _driverProfile;
   final Queue<({String title, String message})> _userRealtimeMessages =
@@ -63,6 +80,9 @@ class AppState extends ChangeNotifier {
       Queue<({String title, String message})>();
   final Map<String, DateTime> _driverOrderPreviewAnchors = <String, DateTime>{};
   final Map<String, int> _driverOrderViewerCounts = <String, int>{};
+  final Map<String, ({OrderStatus status, _DriverInfo? driver})>
+      _lastPassengerOrderEvents =
+          <String, ({OrderStatus status, _DriverInfo? driver})>{};
 
   ThemeMode _themeMode = ThemeMode.light;
   AppLocale _locale = AppLocale.uzLatin;
@@ -116,6 +136,14 @@ class AppState extends ChangeNotifier {
       List<AppOrder>.unmodifiable(_driverActiveOrders);
   List<AppOrder> get driverCompletedOrders =>
       List<AppOrder>.unmodifiable(_driverCompletedOrders);
+  bool get hasMoreOrders => _taxiOrdersHasMore || _deliveryOrdersHasMore;
+  bool get isLoadingMoreOrders => _ordersLoadingMore;
+  bool get driverAvailableHasMore => _driverAvailableHasMore;
+  bool get driverActiveHasMore => _driverActiveHasMore;
+  bool get driverCompletedHasMore => _driverCompletedHasMore;
+  bool get isLoadingMoreDriverAvailable => _driverAvailableLoadingMore;
+  bool get isLoadingMoreDriverActive => _driverActiveLoadingMore;
+  bool get isLoadingMoreDriverCompleted => _driverCompletedLoadingMore;
   int driverOrderViewerCount(String orderId) =>
       _driverOrderViewerCounts[orderId] ?? 0;
   Duration get driverOrderPreviewWindow => _driverOrderPreviewWindow;
@@ -258,35 +286,121 @@ class AppState extends ChangeNotifier {
     if (_regions.isEmpty) {
       await loadRegions(force: true);
     }
-    final data = await _api.fetchUserOrders();
-    final orders = data
-        .map(
-          (json) => AppOrder.fromJson(
-            json,
-            resolveRegionName: _regionDisplayNameById,
-            resolveDistrictName: _districtDisplayNameById,
-          ),
-        )
-        .toList();
-    orders.sort((a, b) {
-      final dateCompare = b.date.compareTo(a.date);
-      if (dateCompare != 0) return dateCompare;
-      return _timeOfDayToMinutes(
-        b.startTime,
-      ).compareTo(_timeOfDayToMinutes(a.startTime));
-    });
-    _orders = orders;
+    _resetUserOrderPagination();
+    await _fetchNextUserOrdersPage();
+  }
+
+  Future<void> loadMoreOrders() => _fetchNextUserOrdersPage();
+
+  Future<void> _fetchNextUserOrdersPage() async {
+    if (!_isAuthenticated) return;
+    if (_ordersLoadingMore) return;
+    if (!_taxiOrdersHasMore && !_deliveryOrdersHasMore) return;
+    _ordersLoadingMore = true;
     notifyListeners();
+    try {
+      final pendingRequests = <String, Future<List<Map<String, dynamic>>>>{};
+      if (_taxiOrdersHasMore) {
+        pendingRequests['taxi'] = _api.fetchUserOrders(
+          type: 'taxi',
+          limit: _ordersPageSize,
+          offset: _taxiOrdersOffset,
+        );
+      }
+      if (_deliveryOrdersHasMore) {
+        pendingRequests['delivery'] = _api.fetchUserOrders(
+          type: 'delivery',
+          limit: _ordersPageSize,
+          offset: _deliveryOrdersOffset,
+        );
+      }
+      if (pendingRequests.isEmpty) return;
+      final responses = <String, List<Map<String, dynamic>>>{};
+      for (final entry in pendingRequests.entries) {
+        responses[entry.key] = await entry.value;
+      }
+
+      final List<AppOrder> newOrders = [];
+      final taxiData = responses['taxi'];
+      if (taxiData != null) {
+        final mapped = taxiData
+            .map(
+              (json) => AppOrder.fromJson(
+                json,
+                resolveRegionName: _regionDisplayNameById,
+                resolveDistrictName: _districtDisplayNameById,
+              ),
+            )
+            .toList();
+        _taxiOrdersOffset += mapped.length;
+        _taxiOrdersHasMore = mapped.length >= _ordersPageSize;
+        newOrders.addAll(mapped);
+      }
+      final deliveryData = responses['delivery'];
+      if (deliveryData != null) {
+        final mapped = deliveryData
+            .map(
+              (json) => AppOrder.fromJson(
+                json,
+                resolveRegionName: _regionDisplayNameById,
+                resolveDistrictName: _districtDisplayNameById,
+              ),
+            )
+            .toList();
+        _deliveryOrdersOffset += mapped.length;
+        _deliveryOrdersHasMore = mapped.length >= _ordersPageSize;
+        newOrders.addAll(mapped);
+      }
+      if (newOrders.isNotEmpty) {
+        _mergePassengerOrders(newOrders);
+      } else {
+        _recomputeUserOrderOffsets();
+      }
+    } finally {
+      _ordersLoadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  void _resetUserOrderPagination() {
+    _orders = <AppOrder>[];
+    _taxiOrdersOffset = 0;
+    _deliveryOrdersOffset = 0;
+    _taxiOrdersHasMore = true;
+    _deliveryOrdersHasMore = true;
+    _ordersLoadingMore = false;
+    _lastPassengerOrderEvents.clear();
   }
 
   Future<void> refreshNotifications() async {
     if (!_isAuthenticated) return;
+    if (_notificationsMuted) {
+      _notifications = <AppNotification>[];
+      notifyListeners();
+      return;
+    }
     final data = await _api.fetchNotifications();
     final items = data.map(AppNotification.fromJson).toList()
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final seenOrderSignatures = <String>{};
+    final deduped = <AppNotification>[];
+    final hideOrderNotifications = !_isDriverMode;
+    for (final item in items) {
+      if (hideOrderNotifications &&
+          item.category == NotificationCategory.orderUpdate) {
+        continue;
+      }
+      if (item.category == NotificationCategory.orderUpdate) {
+        final signature = _notificationSignature(item);
+        if (!seenOrderSignatures.add(signature)) {
+          continue;
+        }
+      }
+      deduped.add(item);
+    }
     final previousIds = _notifications.map((item) => item.id).toSet();
-    final hasNew = items.any((item) => !previousIds.contains(item.id));
-    _notifications = items;
+    final hasNew = deduped.any((item) => !previousIds.contains(item.id));
+    _notifications = deduped;
     if (hasNew) {
       _bumpNotificationSignal();
     }
@@ -392,6 +506,7 @@ class AppState extends ChangeNotifier {
       fallbackType: OrderType.taxi,
     );
     _orders = [order, ..._orders];
+    _recomputeUserOrderOffsets();
     notifyListeners();
     return order;
   }
@@ -471,6 +586,7 @@ class AppState extends ChangeNotifier {
       fallbackType: OrderType.delivery,
     );
     _orders = [order, ..._orders];
+    _recomputeUserOrderOffsets();
     notifyListeners();
     return order;
   }
@@ -628,10 +744,24 @@ class AppState extends ChangeNotifier {
     _driverApplicationSubmitted = false;
     _currentUser = AppUser.empty();
     _orders = <AppOrder>[];
+    _taxiOrdersOffset = 0;
+    _deliveryOrdersOffset = 0;
+    _taxiOrdersHasMore = true;
+    _deliveryOrdersHasMore = true;
+    _ordersLoadingMore = false;
     _notifications = <AppNotification>[];
     _driverAvailableOrders = <AppOrder>[];
     _driverActiveOrders = <AppOrder>[];
     _driverCompletedOrders = <AppOrder>[];
+    _driverAvailableOffset = 0;
+    _driverActiveOffset = 0;
+    _driverCompletedOffset = 0;
+    _driverAvailableHasMore = true;
+    _driverActiveHasMore = true;
+    _driverCompletedHasMore = true;
+    _driverAvailableLoadingMore = false;
+    _driverActiveLoadingMore = false;
+    _driverCompletedLoadingMore = false;
     _driverStats = null;
     _driverProfile = null;
     _driverContextLoading = false;
@@ -640,6 +770,7 @@ class AppState extends ChangeNotifier {
     _lastDriverStatusEventId = null;
     _driverOrderPreviewAnchors.clear();
     _driverOrderViewerCounts.clear();
+    _lastPassengerOrderEvents.clear();
     _refreshRealtimeConnections();
     notifyListeners();
   }
@@ -699,6 +830,7 @@ class AppState extends ChangeNotifier {
     final alreadyTracked = _driverOrderPreviewAnchors.containsKey(orderId);
     if (!alreadyTracked) {
       _driverOrderPreviewAnchors[orderId] = DateTime.now();
+      _persistDriverPreviewAnchors();
       final numericId = int.tryParse(orderId);
       if (numericId != null) {
         Future.microtask(() async {
@@ -741,17 +873,14 @@ class AppState extends ChangeNotifier {
       orderType: order.type,
     );
     if (releaseHold) {
-      releaseDriverOrderPreview(
-        orderId,
-        type: order.type,
-        reason: reason,
-      );
+      releaseDriverOrderPreview(orderId, type: order.type, reason: reason);
       if (reason == 'driver_cancelled') {
         final before = _driverAvailableOrders.length;
         _driverAvailableOrders = _driverAvailableOrders
             .where((item) => item.id != orderId)
             .toList();
         if (before != _driverAvailableOrders.length) {
+          _recomputeDriverPaginationOffsets();
           notifyListeners();
         }
       }
@@ -766,6 +895,9 @@ class AppState extends ChangeNotifier {
     final normalized = orderId.trim();
     if (normalized.isEmpty) return;
     final removed = _driverOrderPreviewAnchors.remove(normalized) != null;
+    if (removed) {
+      _persistDriverPreviewAnchors();
+    }
     if (type != null) {
       final numericId = int.tryParse(orderId);
       if (numericId != null) {
@@ -801,17 +933,23 @@ class AppState extends ChangeNotifier {
     if (_regions.isEmpty) {
       await loadRegions(force: true);
     }
+    _driverAvailableHasMore = true;
+    _driverActiveHasMore = true;
+    _driverAvailableOffset = 0;
+    _driverActiveOffset = 0;
+    _driverAvailableLoadingMore = false;
+    _driverActiveLoadingMore = false;
     _driverContextLoading = true;
     notifyListeners();
     try {
       final dashboardData = await Future.wait([
         _loadDriverStatistics(),
-        _loadDriverNewOrders(),
-        _loadDriverActiveOrders(),
+        _loadDriverNewOrders(offset: 0, limit: _driverOrdersPageSize),
+        _loadDriverActiveOrders(offset: 0, limit: _driverOrdersPageSize),
       ]);
       final stats = dashboardData[0] as DriverStats;
-      final pending = dashboardData[1] as List<AppOrder>;
-      final active = dashboardData[2] as List<AppOrder>;
+      final pending = dashboardData[1] as _PaginatedDriverOrders;
+      final active = dashboardData[2] as _PaginatedDriverOrders;
       _driverStats = stats;
       _currentUser = _currentUser.copyWith(
         balance: stats.currentBalance,
@@ -825,12 +963,126 @@ class AppState extends ChangeNotifier {
           rating: stats.rating,
         );
       }
-      _driverAvailableOrders = pending;
-      _driverActiveOrders = active;
+      _driverAvailableOrders = pending.orders;
+      _driverActiveOrders = active.orders;
+      _driverAvailableHasMore = pending.hasMore;
+      _driverActiveHasMore = active.hasMore;
+      _recomputeDriverPaginationOffsets();
       await _saveSessionSnapshot();
     } finally {
       _driverContextLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreDriverAvailableOrders() async {
+    if (!_currentUser.isDriver || !_currentUser.driverApproved) return;
+    if (_driverAvailableLoadingMore || !_driverAvailableHasMore) return;
+    _driverAvailableLoadingMore = true;
+    notifyListeners();
+    try {
+      final page = await _loadDriverNewOrders(
+        offset: _driverAvailableOffset,
+        limit: _driverOrdersPageSize,
+      );
+      if (page.orders.isNotEmpty) {
+        _driverAvailableOrders = _mergeDriverOrders(
+          _driverAvailableOrders,
+          page.orders,
+        );
+      }
+      _driverAvailableHasMore = page.hasMore;
+      _recomputeDriverPaginationOffsets();
+    } finally {
+      _driverAvailableLoadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreDriverActiveOrders() async {
+    if (!_currentUser.isDriver || !_currentUser.driverApproved) return;
+    if (_driverActiveLoadingMore || !_driverActiveHasMore) return;
+    _driverActiveLoadingMore = true;
+    notifyListeners();
+    try {
+      final page = await _loadDriverActiveOrders(
+        offset: _driverActiveOffset,
+        limit: _driverOrdersPageSize,
+      );
+      if (page.orders.isNotEmpty) {
+        _driverActiveOrders = _mergeDriverOrders(
+          _driverActiveOrders,
+          page.orders,
+        );
+      }
+      _driverActiveHasMore = page.hasMore;
+      _recomputeDriverPaginationOffsets();
+    } finally {
+      _driverActiveLoadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> reloadDriverCompletedOrders() async {
+    if (!_currentUser.isDriver || !_currentUser.driverApproved) return;
+    if (_driverCompletedLoadingMore) return;
+    _driverCompletedOrders = <AppOrder>[];
+    _driverCompletedOffset = 0;
+    _driverCompletedHasMore = true;
+    notifyListeners();
+    await loadMoreDriverCompletedOrders();
+  }
+
+  Future<void> loadMoreDriverCompletedOrders() async {
+    if (!_currentUser.isDriver || !_currentUser.driverApproved) return;
+    if (_driverCompletedLoadingMore || !_driverCompletedHasMore) return;
+    _driverCompletedLoadingMore = true;
+    notifyListeners();
+    try {
+      final page = await _loadDriverCompletedOrders(
+        offset: _driverCompletedOffset,
+        limit: _driverOrdersPageSize,
+      );
+      if (page.orders.isNotEmpty) {
+        _driverCompletedOrders = _mergeDriverOrders(
+          _driverCompletedOrders,
+          page.orders,
+        );
+      }
+      _driverCompletedHasMore = page.hasMore;
+      _recomputeDriverPaginationOffsets();
+    } finally {
+      _driverCompletedLoadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<AppOrder?> loadDriverOrderDetail(AppOrder order) async {
+    if (!_currentUser.isDriver || !_currentUser.driverApproved) return null;
+    final numericId = int.tryParse(order.id);
+    if (numericId == null) return null;
+    try {
+      final details = await _api.fetchOrder(id: numericId, type: order.type);
+      final mapped = AppOrder.fromJson(
+        details,
+        resolveRegionName: _regionDisplayNameById,
+        resolveDistrictName: _districtDisplayNameById,
+        fallbackType: order.type,
+      );
+      final availableOffset = _driverAvailableOffset;
+      final activeOffset = _driverActiveOffset;
+      final completedOffset = _driverCompletedOffset;
+      _bucketDriverOrders([mapped]);
+      _driverAvailableOffset = availableOffset;
+      _driverActiveOffset = activeOffset;
+      _driverCompletedOffset = completedOffset;
+      _mergePassengerOrderFromDriverContext(mapped);
+      notifyListeners();
+      return mapped;
+    } on ApiException {
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -849,11 +1101,7 @@ class AppState extends ChangeNotifier {
     _driverAvailableOrders = _driverAvailableOrders
         .where((item) => item.id != order.id)
         .toList();
-    endDriverOrderPreview(
-      order,
-      releaseHold: true,
-      reason: 'accepted',
-    );
+    endDriverOrderPreview(order, releaseHold: true, reason: 'accepted');
 
     AppOrder accepted = order.copyWith(status: OrderStatus.active);
     try {
@@ -867,14 +1115,27 @@ class AppState extends ChangeNotifier {
     } on ApiException {
       // Ignore detail fetch errors; proceed with basic data.
     }
+    accepted = accepted.copyWith(status: OrderStatus.active);
+    final needsConfirmation = !accepted.isConfirmed;
+
     _driverActiveOrders = [
-      accepted.copyWith(status: OrderStatus.active),
+      accepted,
       ..._driverActiveOrders.where((item) => item.id != accepted.id),
     ];
-    _mergePassengerOrderFromDriverContext(
-      accepted.copyWith(status: OrderStatus.active),
-    );
+    _recomputeDriverPaginationOffsets();
+    _mergePassengerOrderFromDriverContext(accepted);
     await _refreshDriverStatsOnly();
+
+    if (needsConfirmation) {
+      try {
+        await confirmDriverOrder(accepted);
+      } catch (_) {
+        notifyListeners();
+        rethrow;
+      }
+      return;
+    }
+
     notifyListeners();
   }
 
@@ -944,10 +1205,10 @@ class AppState extends ChangeNotifier {
       // Ignore detail fetch errors; use local data.
     }
 
-    _driverCompletedOrders = <AppOrder>[
+    _driverCompletedOrders = _mergeDriverOrders(_driverCompletedOrders, [
       completed.copyWith(status: OrderStatus.completed),
-      ..._driverCompletedOrders,
-    ].take(20).toList();
+    ]);
+    _recomputeDriverPaginationOffsets();
     _mergePassengerOrderFromDriverContext(
       completed.copyWith(status: OrderStatus.completed),
     );
@@ -1058,6 +1319,10 @@ class AppState extends ChangeNotifier {
     final driverInfo = status == OrderStatus.active
         ? _extractDriverInfo(payload['driver'])
         : null;
+    final previousEvent = _lastPassengerOrderEvents[orderId];
+    final alreadyAnnounced = previousEvent != null &&
+        previousEvent.status == status &&
+        _sameDriverInfo(previousEvent.driver, driverInfo);
     final updated = _applyUserOrderStatus(
       payload,
       status,
@@ -1071,7 +1336,12 @@ class AppState extends ChangeNotifier {
       _ => 'order_status',
     };
 
-    _logRealtime('user', '$eventLabel orderId=$orderId localUpdated=$updated');
+    _logRealtime(
+      'user',
+      '$eventLabel orderId=$orderId localUpdated=$updated duplicate=$alreadyAnnounced',
+    );
+    _lastPassengerOrderEvents[orderId] =
+        (status: status, driver: driverInfo);
 
     if (!updated) {
       _logRealtime(
@@ -1107,7 +1377,7 @@ class AppState extends ChangeNotifier {
       default:
         break;
     }
-    if (toastTitle != null) {
+    if (toastTitle != null && !alreadyAnnounced) {
       _announceUserOrderEvent(
         title: toastTitle,
         orderId: orderId,
@@ -1164,6 +1434,7 @@ class AppState extends ChangeNotifier {
     bool enforceUserCheck = true,
     bool announce = true,
   }) {
+    if (_notificationsMuted) return;
     if (enforceUserCheck && !_payloadTargetsCurrentUser(payload)) {
       return;
     }
@@ -1177,10 +1448,31 @@ class AppState extends ChangeNotifier {
         rawType == 'application_approved' || rawType == 'application_rejected';
 
     final notification = AppNotification.fromJson(data);
-    final existing = _notifications.any((item) => item.id == notification.id);
+    AppNotification? duplicateByContent;
+    for (final item in _notifications) {
+      if (_isSameNotificationContent(item, notification)) {
+        duplicateByContent = item;
+        break;
+      }
+    }
+    final normalizedNotification = (duplicateByContent?.isRead == true &&
+            notification.isRead == false)
+        ? notification.copyWith(isRead: true)
+        : notification;
+    final isOrderUpdate =
+        normalizedNotification.category == NotificationCategory.orderUpdate;
+    if (isOrderUpdate && !_isDriverMode) {
+      return;
+    }
+    final existing = duplicateByContent != null ||
+        _notifications.any((item) => item.id == normalizedNotification.id);
     final updatedList = [
-      notification,
-      ..._notifications.where((item) => item.id != notification.id),
+      normalizedNotification,
+      ..._notifications.where(
+        (item) =>
+            item.id != normalizedNotification.id &&
+            !_isSameNotificationContent(item, normalizedNotification),
+      ),
     ]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
     _notifications = updatedList;
     if (!existing) {
@@ -1194,10 +1486,12 @@ class AppState extends ChangeNotifier {
       );
     }
 
-    if (announce && !existing) {
+    // Order updates already surface localized toasts via realtime handlers.
+    final shouldAnnounce = announce && !existing && !isOrderUpdate;
+    if (shouldAnnounce) {
       _enqueueUserRealtimeMessage(
-        title: notification.title,
-        message: notification.message,
+        title: normalizedNotification.title,
+        message: normalizedNotification.message,
       );
     }
   }
@@ -1295,6 +1589,7 @@ class AppState extends ChangeNotifier {
     required String orderId,
     String? details,
   }) {
+    if (_notificationsMuted) return;
     if (orderId.isEmpty) return;
     final idLabel = localization
         .tr('orderIdLabel')
@@ -1303,10 +1598,10 @@ class AppState extends ChangeNotifier {
         ? idLabel
         : '$idLabel - $details';
     _enqueueUserRealtimeMessage(title: title, message: message);
-    _prependRealtimeNotification(title, message);
   }
 
   void _announceDriverNewOrder(AppOrder order) {
+    if (_notificationsMuted) return;
     final title = order.isDelivery
         ? localization.tr('deliveryOrder')
         : localization.tr('taxiOrder');
@@ -1319,6 +1614,7 @@ class AppState extends ChangeNotifier {
     required String title,
     required String message,
   }) {
+    if (_notificationsMuted) return;
     if (title.isEmpty && message.isEmpty) return;
     _userRealtimeMessages.add((title: title, message: message));
     notifyListeners();
@@ -1328,6 +1624,7 @@ class AppState extends ChangeNotifier {
     required String title,
     required String message,
   }) {
+    if (_notificationsMuted) return;
     if (title.isEmpty && message.isEmpty) return;
     _driverRealtimeMessages.add((title: title, message: message));
     notifyListeners();
@@ -1339,6 +1636,7 @@ class AppState extends ChangeNotifier {
       ..._driverAvailableOrders.where((item) => item.id != order.id),
     ];
     _driverAvailableOrders.sort(_driverOrderComparator);
+    _recomputeDriverPaginationOffsets();
     notifyListeners();
   }
 
@@ -1351,6 +1649,7 @@ class AppState extends ChangeNotifier {
     if (changed) {
       _driverOrderViewerCounts.remove(orderId);
       releaseDriverOrderPreview(orderId);
+      _recomputeDriverPaginationOffsets();
     }
     return changed;
   }
@@ -1380,6 +1679,7 @@ class AppState extends ChangeNotifier {
             mapped,
             ..._driverActiveOrders.where((item) => item.id != mapped.id),
           ];
+          _recomputeDriverPaginationOffsets();
           if (_mergePassengerOrderFromDriverContext(mapped)) {
             shouldNotify = true;
           }
@@ -1439,9 +1739,13 @@ class AppState extends ChangeNotifier {
       _driverOrderViewerCounts.remove(orderId);
       releaseDriverOrderPreview(orderId, type: orderType);
       if (before != _driverAvailableOrders.length) {
+        _recomputeDriverPaginationOffsets();
         notifyListeners();
       }
-      _logRealtime('driver', 'order_returned removed self-cancelled orderId=$orderId');
+      _logRealtime(
+        'driver',
+        'order_returned removed self-cancelled orderId=$orderId',
+      );
       return;
     }
 
@@ -1452,11 +1756,7 @@ class AppState extends ChangeNotifier {
     final rawOrder = payload['order'];
     AppOrder? mapped;
     if (rawOrder is Map<String, dynamic>) {
-      mapped = _driverOrderFromMap(
-        rawOrder,
-        orderType,
-        usePayloadStatus: true,
-      );
+      mapped = _driverOrderFromMap(rawOrder, orderType, usePayloadStatus: true);
     } else if (rawOrder is Map) {
       mapped = _driverOrderFromMap(
         Map<String, dynamic>.from(rawOrder),
@@ -1474,8 +1774,13 @@ class AppState extends ChangeNotifier {
 
     // Fallback: refresh available orders
     try {
-      final pending = await _loadDriverNewOrders();
-      _driverAvailableOrders = pending;
+      final pending = await _loadDriverNewOrders(
+        offset: 0,
+        limit: _driverOrdersPageSize,
+      );
+      _driverAvailableOrders = pending.orders;
+      _driverAvailableHasMore = pending.hasMore;
+      _recomputeDriverPaginationOffsets();
       notifyListeners();
     } on ApiException catch (error) {
       _logRealtime(
@@ -1509,10 +1814,10 @@ class AppState extends ChangeNotifier {
       _driverActiveOrders = _driverActiveOrders
           .where((order) => order.id != orderId)
           .toList();
-      _driverCompletedOrders = <AppOrder>[
+      _driverCompletedOrders = _mergeDriverOrders(_driverCompletedOrders, [
         completed,
-        ..._driverCompletedOrders,
-      ].take(20).toList();
+      ]);
+      _recomputeDriverPaginationOffsets();
       _mergePassengerOrderFromDriverContext(completed);
       await _refreshDriverStatsOnly();
       notifyListeners();
@@ -1520,6 +1825,7 @@ class AppState extends ChangeNotifier {
       _driverActiveOrders = _driverActiveOrders
           .where((order) => order.id != orderId)
           .toList();
+      _recomputeDriverPaginationOffsets();
       notifyListeners();
     }
   }
@@ -1547,6 +1853,9 @@ class AppState extends ChangeNotifier {
 
     final removedFromActive = removedActive != null;
     var shouldNotify = pendingChanged || removedFromActive;
+    if (shouldNotify) {
+      _recomputeDriverPaginationOffsets();
+    }
 
     if (removedFromActive) {
       await _refreshDriverStatsOnly();
@@ -1613,6 +1922,22 @@ class AppState extends ChangeNotifier {
     }
     return normalized;
   }
+
+  bool _isSameNotificationContent(
+    AppNotification a,
+    AppNotification b,
+  ) {
+    return _notificationSignature(a) == _notificationSignature(b);
+  }
+
+  String _notificationSignature(AppNotification notification) {
+    return '${notification.category.name}|'
+        '${_normalizeNotificationText(notification.title)}|'
+        '${_normalizeNotificationText(notification.message)}';
+  }
+
+  String _normalizeNotificationText(String input) =>
+      input.trim().toLowerCase();
 
   void _bumpNotificationSignal() {
     _notificationSignal = (_notificationSignal + 1) & 0x7fffffff;
@@ -1761,6 +2086,7 @@ class AppState extends ChangeNotifier {
     if (changed) {
       _orders = merged;
       _sortOrders();
+      _recomputeUserOrderOffsets();
     }
     return changed;
   }
@@ -1902,6 +2228,15 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  bool _sameDriverInfo(_DriverInfo? a, _DriverInfo? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    return (a.name ?? '').trim() == (b.name ?? '').trim() &&
+        (a.phone ?? '').trim() == (b.phone ?? '').trim() &&
+        (a.vehicle ?? '').trim() == (b.vehicle ?? '').trim() &&
+        (a.plate ?? '').trim() == (b.plate ?? '').trim();
+  }
+
   bool _payloadTargetsCurrentUser(Map<String, dynamic> payload) {
     final rawUserId = payload['user_id'];
     if (rawUserId == null) return true;
@@ -1950,6 +2285,13 @@ class AppState extends ChangeNotifier {
     _isDriverMode = _currentUser.isDriver;
     _driverApplicationSubmitted = false;
     _refreshRealtimeConnections();
+    final anchors = await storage.readDriverPreviewAnchors();
+    if (anchors.isNotEmpty) {
+      _driverOrderPreviewAnchors
+        ..clear()
+        ..addAll(anchors);
+      _pruneDriverPreviewAnchors();
+    }
     notifyListeners();
     await _bootstrapAfterAuth();
     return true;
@@ -1967,6 +2309,7 @@ class AppState extends ChangeNotifier {
     } else {
       await storage.updateUser(_currentUser);
     }
+    await storage.saveDriverPreviewAnchors(_driverOrderPreviewAnchors);
   }
 
   AppUser _hydrateUser(AppUser user) {
@@ -1995,6 +2338,25 @@ class AppState extends ChangeNotifier {
           ),
         )
         .toList();
+  }
+
+  void _mergePassengerOrders(List<AppOrder> incoming) {
+    if (incoming.isEmpty) return;
+    final merged = <String, AppOrder>{};
+    for (final order in _orders) {
+      merged[order.id] = order;
+    }
+    for (final order in incoming) {
+      merged[order.id] = order;
+    }
+    _orders = merged.values.toList();
+    _sortOrders();
+    _recomputeUserOrderOffsets();
+  }
+
+  void _recomputeUserOrderOffsets() {
+    _taxiOrdersOffset = _orders.where((order) => order.isTaxi).length;
+    _deliveryOrdersOffset = _orders.where((order) => order.isDelivery).length;
   }
 
   void _sortOrders() {
@@ -2160,6 +2522,15 @@ class AppState extends ChangeNotifier {
         _driverAvailableOrders = <AppOrder>[];
         _driverActiveOrders = <AppOrder>[];
         _driverCompletedOrders = <AppOrder>[];
+        _driverAvailableOffset = 0;
+        _driverActiveOffset = 0;
+        _driverCompletedOffset = 0;
+        _driverAvailableHasMore = true;
+        _driverActiveHasMore = true;
+        _driverCompletedHasMore = true;
+        _driverAvailableLoadingMore = false;
+        _driverActiveLoadingMore = false;
+        _driverCompletedLoadingMore = false;
         _driverStats = null;
         _isDriverMode = false;
         if (!roleAllowsDriver) {
@@ -2199,19 +2570,75 @@ class AppState extends ChangeNotifier {
     return DriverStats.fromJson(response);
   }
 
-  Future<List<AppOrder>> _loadDriverNewOrders() async {
+  Future<_PaginatedDriverOrders> _loadDriverNewOrders({
+    int offset = 0,
+    int limit = _driverOrdersPageSize,
+  }) async {
     // Backend now exposes available orders via the active endpoint
     // so new/pending orders are fetched from `/driver/orders/active`.
-    final response = await _api.fetchDriverActiveOrders();
-    return _mapDriverNewOrders(response);
+    final response = await _api.fetchDriverActiveOrders(
+      limit: limit,
+      offset: offset,
+    );
+    final orders = _mapDriverNewOrders(response);
+    return _PaginatedDriverOrders(
+      orders: orders,
+      hasMore: _hasMoreFromPayload(
+        response,
+        returned: orders.length,
+        limit: limit,
+        offset: offset,
+      ),
+    );
   }
 
-  Future<List<AppOrder>> _loadDriverActiveOrders() async {
-    final response = await _api.fetchDriverAssignedOrders(status: 'accepted');
-    return _mapDriverOrders(
+  Future<_PaginatedDriverOrders> _loadDriverActiveOrders({
+    int offset = 0,
+    int limit = _driverOrdersPageSize,
+  }) async {
+    final response = await _api.fetchDriverAssignedOrders(
+      status: 'accepted',
+      limit: limit,
+      offset: offset,
+    );
+    final orders = _mapDriverOrders(
       response,
       status: OrderStatus.active,
       usePayloadStatus: true,
+    );
+    return _PaginatedDriverOrders(
+      orders: orders,
+      hasMore: _hasMoreFromPayload(
+        response,
+        returned: orders.length,
+        limit: limit,
+        offset: offset,
+      ),
+    );
+  }
+
+  Future<_PaginatedDriverOrders> _loadDriverCompletedOrders({
+    int offset = 0,
+    int limit = _driverOrdersPageSize,
+  }) async {
+    final response = await _api.fetchDriverAssignedOrders(
+      status: 'completed',
+      limit: limit,
+      offset: offset,
+    );
+    final orders = _mapDriverOrders(
+      response,
+      status: OrderStatus.completed,
+      usePayloadStatus: true,
+    );
+    return _PaginatedDriverOrders(
+      orders: orders,
+      hasMore: _hasMoreFromPayload(
+        response,
+        returned: orders.length,
+        limit: limit,
+        offset: offset,
+      ),
     );
   }
 
@@ -2284,6 +2711,28 @@ class AppState extends ChangeNotifier {
     return results;
   }
 
+  bool _hasMoreFromPayload(
+    Map<String, dynamic> payload, {
+    required int returned,
+    required int limit,
+    required int offset,
+  }) {
+    final meta = payload['pagination'];
+    if (meta is Map<String, dynamic>) {
+      final hasMoreRaw = meta['has_more'];
+      if (hasMoreRaw is bool) return hasMoreRaw;
+      final totalRaw = meta['total'] ?? meta['count'];
+      if (totalRaw is num) {
+        return totalRaw.toInt() > offset + returned;
+      }
+      if (totalRaw is String) {
+        final parsed = int.tryParse(totalRaw);
+        if (parsed != null) return parsed > offset + returned;
+      }
+    }
+    return returned >= limit;
+  }
+
   AppOrder? _driverOrderFromMap(
     Map<String, dynamic> json,
     OrderType type, {
@@ -2313,7 +2762,9 @@ class AppState extends ChangeNotifier {
     }
 
     final fromRegionId = parseInt(json['from_region_id']);
+    final fromDistrictId = parseInt(json['from_district_id']);
     final toRegionId = parseInt(json['to_region_id']);
+    final toDistrictId = parseInt(json['to_district_id']);
     final passengers = parseInt(json['passengers'] ?? 1).clamp(1, 4);
     final date = _parseDriverDate(json['date']?.toString()) ?? DateTime.now();
     final start =
@@ -2323,7 +2774,9 @@ class AppState extends ChangeNotifier {
         _parseDriverTime(json['time_end']?.toString()) ??
         const TimeOfDay(hour: 0, minute: 0);
     final fromRegion = _regionDisplayNameById(fromRegionId);
+    final fromDistrict = _districtDisplayNameById(fromDistrictId);
     final toRegion = _regionDisplayNameById(toRegionId);
+    final toDistrict = _districtDisplayNameById(toDistrictId);
     final note = type == OrderType.delivery
         ? json['item_type']?.toString()
         : json['note']?.toString();
@@ -2350,10 +2803,9 @@ class AppState extends ChangeNotifier {
 
     final parsedStatus = usePayloadStatus
         ? (_orderStatusFromValue(json['status']) ??
-            _orderStatusFromValue(json['order_status']))
+              _orderStatusFromValue(json['order_status']))
         : null;
-    final resolvedStatus =
-        parsedStatus ?? status ?? OrderStatus.pending;
+    final resolvedStatus = parsedStatus ?? status ?? OrderStatus.pending;
 
     return AppOrder(
       id: (json['id'] ?? '').toString(),
@@ -2361,9 +2813,9 @@ class AppState extends ChangeNotifier {
       createdAt: createdAt,
       type: type,
       fromRegion: fromRegion,
-      fromDistrict: fromRegion,
+      fromDistrict: fromDistrict,
       toRegion: toRegion,
-      toDistrict: toRegion,
+      toDistrict: toDistrict,
       passengers: type == OrderType.taxi ? passengers : 1,
       date: date,
       startTime: start,
@@ -2372,15 +2824,77 @@ class AppState extends ChangeNotifier {
       priceAvailable: hasPrice,
       status: resolvedStatus,
       fromRegionId: fromRegionId,
-      fromDistrictId: 0,
+      fromDistrictId: fromDistrictId,
       toRegionId: toRegionId,
-      toDistrictId: 0,
+      toDistrictId: toDistrictId,
       note: note,
       customerName: customerName,
       customerPhone: customerPhone,
       isConfirmed: isConfirmed,
       confirmedAt: confirmedAt,
     );
+  }
+
+  List<AppOrder> _mergeDriverOrders(
+    List<AppOrder> current,
+    List<AppOrder> incoming,
+  ) {
+    if (incoming.isEmpty) return current;
+    final merged = <String, AppOrder>{};
+    for (final order in current) {
+      merged[order.id] = order;
+    }
+    for (final order in incoming) {
+      merged[order.id] = order;
+    }
+    final list = merged.values.toList();
+    list.sort(_driverOrderComparator);
+    return list;
+  }
+
+  void _bucketDriverOrders(Iterable<AppOrder> orders) {
+    for (final order in orders) {
+      _upsertDriverOrderBucket(order);
+    }
+  }
+
+  void _upsertDriverOrderBucket(AppOrder order) {
+    switch (order.status) {
+      case OrderStatus.pending:
+        _driverAvailableOrders = _mergeDriverOrders(_driverAvailableOrders, [
+          order,
+        ]);
+        _driverActiveOrders = _driverActiveOrders
+            .where((item) => item.id != order.id)
+            .toList();
+        _driverCompletedOrders = _driverCompletedOrders
+            .where((item) => item.id != order.id)
+            .toList();
+        break;
+      case OrderStatus.active:
+        _driverActiveOrders = _mergeDriverOrders(_driverActiveOrders, [order]);
+        _removeDriverPendingOrder(order.id);
+        _driverCompletedOrders = _driverCompletedOrders
+            .where((item) => item.id != order.id)
+            .toList();
+        break;
+      case OrderStatus.completed:
+      case OrderStatus.cancelled:
+        _driverCompletedOrders = _mergeDriverOrders(_driverCompletedOrders, [
+          order,
+        ]);
+        _removeDriverPendingOrder(order.id);
+        _driverActiveOrders = _driverActiveOrders
+            .where((item) => item.id != order.id)
+            .toList();
+        break;
+    }
+  }
+
+  void _recomputeDriverPaginationOffsets() {
+    _driverAvailableOffset = _driverAvailableOrders.length;
+    _driverActiveOffset = _driverActiveOrders.length;
+    _driverCompletedOffset = _driverCompletedOrders.length;
   }
 
   int _driverOrderComparator(AppOrder a, AppOrder b) {
@@ -2413,6 +2927,7 @@ class AppState extends ChangeNotifier {
     for (final orderId in stale) {
       _driverOrderPreviewAnchors.remove(orderId);
     }
+    _persistDriverPreviewAnchors();
   }
 
   void _emitDriverRealtimeCommand({
@@ -2427,6 +2942,12 @@ class AppState extends ChangeNotifier {
       'order_id': numericId,
       'order_type': orderType.name,
     });
+  }
+
+  void _persistDriverPreviewAnchors() async {
+    if (!_isAuthenticated) return;
+    await _ensureStorage();
+    await _sessionStorage?.saveDriverPreviewAnchors(_driverOrderPreviewAnchors);
   }
 
   DateTime? _normalizeServerTimestamp(String? value) {
@@ -2501,6 +3022,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _prependRealtimeNotification(String title, String message) {
+    if (_notificationsMuted) return;
     if (title.isEmpty && message.isEmpty) return;
     final notification = AppNotification(
       id: 'rt-${DateTime.now().microsecondsSinceEpoch}',
@@ -2510,8 +3032,18 @@ class AppState extends ChangeNotifier {
       category: NotificationCategory.system,
       isRead: false,
     );
-    _notifications = [notification, ..._notifications];
-    _bumpNotificationSignal();
+    final isDuplicate = _notifications.any(
+      (item) => _isSameNotificationContent(item, notification),
+    );
+    _notifications = [
+      notification,
+      ..._notifications.where(
+        (item) => !_isSameNotificationContent(item, notification),
+      ),
+    ];
+    if (!isDuplicate) {
+      _bumpNotificationSignal();
+    }
     notifyListeners();
   }
 
@@ -2597,6 +3129,13 @@ class AppState extends ChangeNotifier {
     _api.dispose();
     super.dispose();
   }
+}
+
+class _PaginatedDriverOrders {
+  const _PaginatedDriverOrders({required this.orders, required this.hasMore});
+
+  final List<AppOrder> orders;
+  final bool hasMore;
 }
 
 typedef _DriverInfo = ({

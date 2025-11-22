@@ -346,7 +346,8 @@ DateTime? _parseDate(String value) {
 DateTime? _parseDateTimeValue(String value) {
   if (value.isEmpty) return null;
   try {
-    return DateTime.parse(value);
+    final parsed = DateTime.parse(value);
+    return parsed.isUtc ? parsed.toLocal() : parsed;
   } catch (_) {
     return _parseDate(value);
   }

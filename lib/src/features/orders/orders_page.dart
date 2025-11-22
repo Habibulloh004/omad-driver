@@ -45,6 +45,18 @@ class _OrdersPageState extends State<OrdersPage>
     _drainUserRealtimeToasts(state);
     final activeOrders = state.activeOrders;
     final historyOrders = state.historyOrders;
+    const activeMoreThreshold = 20;
+    const historyMoreThreshold = 20;
+    bool _hasMoreFor({
+      required List<AppOrder> orders,
+      required bool isActive,
+    }) {
+      final threshold = isActive ? activeMoreThreshold : historyMoreThreshold;
+      // Only show "More" when we've reached the tab threshold and backend reports more pages.
+      return orders.length >= threshold && state.hasMoreOrders;
+    }
+    final activeHasMore = _hasMoreFor(orders: activeOrders, isActive: true);
+    final historyHasMore = _hasMoreFor(orders: historyOrders, isActive: false);
     final mediaPadding = MediaQuery.of(context).padding;
     final bottomSpacing =
         mediaPadding.bottom + AppSpacing.xxl * 2 + AppSpacing.lg;
@@ -109,23 +121,32 @@ class _OrdersPageState extends State<OrdersPage>
                     itemBuilder: (context, index) {
                       final isActiveTab = index == 0;
                       final orders = isActiveTab ? activeOrders : historyOrders;
+                      final hasMoreForTab =
+                          isActiveTab ? activeHasMore : historyHasMore;
+                      final showTopMoreButton =
+                          isActiveTab && hasMoreForTab; // keep top button only for active
                       final emptyText = isActiveTab
                           ? strings.tr('noActiveOrders')
                           : strings.tr('noHistory');
 
+                      final isLoadingMore = state.isLoadingMoreOrders;
+                      final showMoreButton = hasMoreForTab;
+                      final showLoaderRow = isLoadingMore || showMoreButton;
                       final child = orders.isEmpty
-                          ? Center(
-                              key: ValueKey('empty-$index'),
-                              child: Text(
-                                emptyText,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.6,
+                          ? (isLoadingMore
+                              ? const Center(child: CircularProgressIndicator())
+                              : Center(
+                                  key: ValueKey('empty-$index'),
+                                  child: Text(
+                                    emptyText,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.6),
+                                    ),
+                                    textAlign: TextAlign.center,
                                   ),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            )
+                            ))
                           : ListView.separated(
                               key: PageStorageKey('orders-$index'),
                               physics: const BouncingScrollPhysics(),
@@ -134,18 +155,65 @@ class _OrdersPageState extends State<OrdersPage>
                                 top: AppSpacing.sm,
                                 bottom: bottomSpacing,
                               ),
-                              itemCount: orders.length,
+                              itemCount: orders.length +
+                                  (showTopMoreButton ? 1 : 0) +
+                                  (showLoaderRow ? 1 : 0),
                               separatorBuilder: (_, __) =>
                                   const SizedBox(height: AppSpacing.sm),
                               itemBuilder: (context, listIndex) {
-                                final order = orders[listIndex];
+                                // Leading "More" button at top for active tab.
+                                if (showTopMoreButton && listIndex == 0) {
+                                  return Align(
+                                    alignment: Alignment.centerRight,
+                                    child: ElevatedButton(
+                                      onPressed: () => context
+                                          .read<AppState>()
+                                          .loadMoreOrders(),
+                                      child: Text(strings.tr('more')),
+                                    ),
+                                  );
+                                }
+
+                                final adjustedIndex =
+                                    listIndex - (showTopMoreButton ? 1 : 0);
+                                if (adjustedIndex >= orders.length) {
+                                  if (isLoadingMore) {
+                                    return const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: AppSpacing.md,
+                                      ),
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    );
+                                  }
+                                  if (!showMoreButton) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: AppSpacing.sm,
+                                    ),
+                                    child: Center(
+                                      child: ElevatedButton(
+                                        onPressed: () => context
+                                            .read<AppState>()
+                                            .loadMoreOrders(),
+                                        child: Text(strings.tr('more')),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final order = orders[adjustedIndex];
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: AppSpacing.xs,
                                   ),
                                   child: _OrderCard(
                                     order: order,
-                                    onTap: () => _openDetails(context, order),
+                                    onTap: () =>
+                                        _openDetails(context, order),
                                   ),
                                 );
                               },
