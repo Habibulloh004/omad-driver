@@ -40,15 +40,24 @@ class AuthSession {
 }
 
 class ApiClient {
-  ApiClient({http.Client? client, this.baseUrl = apiBaseUrl})
-    : _client = client ?? http.Client();
+  ApiClient({
+    http.Client? client,
+    this.baseUrl = apiBaseUrl,
+    FutureOr<void> Function()? onUnauthorized,
+  }) : _client = client ?? http.Client(),
+       _onUnauthorized = onUnauthorized;
 
   final http.Client _client;
   final String baseUrl;
   String? _token;
+  FutureOr<void> Function()? _onUnauthorized;
 
   void updateToken(String? token) {
     _token = token?.isEmpty ?? true ? null : token;
+  }
+
+  void setUnauthorizedHandler(FutureOr<void> Function()? handler) {
+    _onUnauthorized = handler;
   }
 
   Future<AuthSession> login({
@@ -351,6 +360,67 @@ class ApiClient {
     return _ensureMap(response);
   }
 
+  Future<Map<String, dynamic>> fetchDriverAssignedOrders({
+    String? status,
+  }) async {
+    final query = <String, dynamic>{};
+    final normalized = status?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      query['status_filter'] = normalized;
+    }
+    final response = await _request(
+      'GET',
+      '/driver/orders/my-orders',
+      authorized: true,
+      query: query.isEmpty ? null : query,
+    );
+    return _ensureMap(response);
+  }
+
+  Future<void> previewDriverOrder({
+    required int id,
+    required OrderType type,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/driver/orders/preview/${type.name}/$id',
+      authorized: true,
+    );
+    final map = _ensureMap(response);
+    if (map['success'] == false) {
+      final message = map['message']?.toString().trim();
+      throw ApiException(
+        message == null || message.isEmpty
+            ? 'Failed to start order preview'
+            : message,
+        statusCode: 400,
+      );
+    }
+  }
+
+  Future<void> releaseDriverOrderPreview({
+    required int id,
+    required OrderType type,
+    String? reason,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/driver/orders/preview/release/${type.name}/$id',
+      authorized: true,
+      body: reason == null ? null : {'reason': reason},
+    );
+    final map = _ensureMap(response);
+    if (map['success'] == false) {
+      final message = map['message']?.toString().trim();
+      throw ApiException(
+        message == null || message.isEmpty
+            ? 'Failed to release order preview'
+            : message,
+        statusCode: 400,
+      );
+    }
+  }
+
   Future<void> acceptDriverOrder({
     required int id,
     required OrderType type,
@@ -368,6 +438,35 @@ class ApiClient {
         statusCode: 400,
       );
     }
+  }
+
+  Future<Map<String, dynamic>> confirmDriverOrder({
+    required int id,
+    required OrderType type,
+  }) async {
+    final response = await _request(
+      'POST',
+      '/driver/orders/confirm/${type.name}/$id',
+      authorized: true,
+    );
+    final map = _ensureMap(response);
+    if (map['success'] == false) {
+      final message = map['message']?.toString().trim();
+      throw ApiException(
+        message == null || message.isEmpty
+            ? 'Failed to confirm order'
+            : message,
+        statusCode: 400,
+      );
+    }
+    final order = map['order'];
+    if (order is Map<String, dynamic>) {
+      return order;
+    }
+    if (order is Map) {
+      return Map<String, dynamic>.from(order);
+    }
+    return const {};
   }
 
   Future<void> completeDriverOrder({
@@ -399,11 +498,11 @@ class ApiClient {
     Map<String, dynamic>? query,
   }) async {
     final uri = _uri(path, query);
-    final headers = _headers(
-      authorized: authorized,
-      includeContentType: body != null,
-    );
     try {
+      final headers = _headers(
+        authorized: authorized,
+        includeContentType: body != null,
+      );
       final response = await _send(
         method: method,
         uri: uri,
@@ -411,6 +510,11 @@ class ApiClient {
         body: body,
       ).timeout(const Duration(seconds: 20));
       return _parseResponse(response);
+    } on ApiException catch (error) {
+      if (authorized && error.statusCode == 401) {
+        _notifyUnauthorized();
+      }
+      rethrow;
     } on SocketException {
       throw const ApiException('No internet connection', statusCode: 0);
     } on TimeoutException {
@@ -522,6 +626,16 @@ class ApiClient {
     final response = await http.Response.fromStream(streamed);
     final parsed = _parseResponse(response);
     return _ensureMap(parsed);
+  }
+
+  void _notifyUnauthorized() {
+    final handler = _onUnauthorized;
+    if (handler == null) return;
+    Future.microtask(() async {
+      try {
+        await handler();
+      } catch (_) {}
+    });
   }
 
   dynamic _parseResponse(http.Response response) {

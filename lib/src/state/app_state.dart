@@ -23,6 +23,7 @@ class AppState extends ChangeNotifier {
   AppState({ApiClient? apiClient, RealtimeGateway? realtime})
     : _api = apiClient ?? ApiClient(),
       _realtime = realtime ?? RealtimeGateway(baseUrl: backendBaseUrl) {
+    _api.setUnauthorizedHandler(_handleUnauthorizedLogout);
     _realtime.setHandlers(
       onUserEvent: _handleUserRealtimeEvent,
       onDriverEvent: _handleDriverRealtimeEvent,
@@ -31,7 +32,7 @@ class AppState extends ChangeNotifier {
   }
 
   static const Duration _sessionTTL = Duration(days: 7);
-  static const Duration _driverOrderFreshnessWindow = Duration(minutes: 5);
+  static const Duration _driverOrderPreviewWindow = Duration(minutes: 15);
   static const Duration _serverTimeOffset = Duration(hours: 5);
   static const Set<String> _driverEligibleRoles = {
     'driver',
@@ -60,6 +61,8 @@ class AppState extends ChangeNotifier {
       Queue<({String title, String message})>();
   final Queue<({String title, String message})> _driverRealtimeMessages =
       Queue<({String title, String message})>();
+  final Map<String, DateTime> _driverOrderPreviewAnchors = <String, DateTime>{};
+  final Map<String, int> _driverOrderViewerCounts = <String, int>{};
 
   ThemeMode _themeMode = ThemeMode.light;
   AppLocale _locale = AppLocale.uzLatin;
@@ -68,6 +71,7 @@ class AppState extends ChangeNotifier {
   bool _driverApplicationSubmitted = false;
   bool _bootstrapping = true;
   bool _driverContextLoading = false;
+  bool _handlingUnauthorizedLogout = false;
   String? _authToken;
   int? _driverProfileId;
   int _notificationSignal = 0;
@@ -112,6 +116,36 @@ class AppState extends ChangeNotifier {
       List<AppOrder>.unmodifiable(_driverActiveOrders);
   List<AppOrder> get driverCompletedOrders =>
       List<AppOrder>.unmodifiable(_driverCompletedOrders);
+  int driverOrderViewerCount(String orderId) =>
+      _driverOrderViewerCounts[orderId] ?? 0;
+  Duration get driverOrderPreviewWindow => _driverOrderPreviewWindow;
+  DateTime? driverOrderPreviewStartedAt(String orderId) {
+    _pruneDriverPreviewAnchors();
+    return _driverOrderPreviewAnchors[orderId];
+  }
+
+  DateTime? driverOrderPreviewExpiresAt(String orderId) {
+    final started = driverOrderPreviewStartedAt(orderId);
+    if (started == null) return null;
+    return started.add(_driverOrderPreviewWindow);
+  }
+
+  Duration? driverOrderPreviewRemaining(String orderId) {
+    final expiresAt = driverOrderPreviewExpiresAt(orderId);
+    if (expiresAt == null) return null;
+    final now = DateTime.now();
+    if (!expiresAt.isAfter(now)) {
+      return Duration.zero;
+    }
+    return expiresAt.difference(now);
+  }
+
+  bool isDriverOrderPreviewActive(String orderId) {
+    final remaining = driverOrderPreviewRemaining(orderId);
+    if (remaining == null) return false;
+    return remaining > Duration.zero;
+  }
+
   DriverStats? get driverStats => _driverStats;
   DriverProfile? get driverProfile => _driverProfile;
   bool get isDriverContextLoading => _driverContextLoading;
@@ -604,8 +638,20 @@ class AppState extends ChangeNotifier {
     _bootstrapping = false;
     _driverProfileId = null;
     _lastDriverStatusEventId = null;
+    _driverOrderPreviewAnchors.clear();
+    _driverOrderViewerCounts.clear();
     _refreshRealtimeConnections();
     notifyListeners();
+  }
+
+  Future<void> _handleUnauthorizedLogout() async {
+    if (_handlingUnauthorizedLogout || !_isAuthenticated) return;
+    _handlingUnauthorizedLogout = true;
+    try {
+      await logout();
+    } finally {
+      _handlingUnauthorizedLogout = false;
+    }
   }
 
   void switchToDriverMode() {
@@ -646,6 +692,109 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void beginDriverOrderPreview(AppOrder order) {
+    final orderId = order.id.trim();
+    if (orderId.isEmpty) return;
+    _pruneDriverPreviewAnchors();
+    final alreadyTracked = _driverOrderPreviewAnchors.containsKey(orderId);
+    if (!alreadyTracked) {
+      _driverOrderPreviewAnchors[orderId] = DateTime.now();
+      final numericId = int.tryParse(orderId);
+      if (numericId != null) {
+        Future.microtask(() async {
+          try {
+            await _api.previewDriverOrder(id: numericId, type: order.type);
+          } on ApiException catch (error) {
+            _logRealtime(
+              'driver',
+              'preview_failed orderId=$orderId error=${error.message}',
+            );
+          } catch (_) {
+            _logRealtime(
+              'driver',
+              'preview_failed orderId=$orderId error=unknown',
+            );
+          }
+        });
+      }
+    }
+    _emitDriverRealtimeCommand(
+      type: 'viewing_order',
+      orderId: orderId,
+      orderType: order.type,
+    );
+    if (!alreadyTracked) {
+      notifyListeners();
+    }
+  }
+
+  void endDriverOrderPreview(
+    AppOrder order, {
+    bool releaseHold = false,
+    String? reason,
+  }) {
+    final orderId = order.id.trim();
+    if (orderId.isEmpty) return;
+    _emitDriverRealtimeCommand(
+      type: 'stop_viewing_order',
+      orderId: orderId,
+      orderType: order.type,
+    );
+    if (releaseHold) {
+      releaseDriverOrderPreview(
+        orderId,
+        type: order.type,
+        reason: reason,
+      );
+      if (reason == 'driver_cancelled') {
+        final before = _driverAvailableOrders.length;
+        _driverAvailableOrders = _driverAvailableOrders
+            .where((item) => item.id != orderId)
+            .toList();
+        if (before != _driverAvailableOrders.length) {
+          notifyListeners();
+        }
+      }
+    }
+  }
+
+  void releaseDriverOrderPreview(
+    String orderId, {
+    OrderType? type,
+    String? reason,
+  }) {
+    final normalized = orderId.trim();
+    if (normalized.isEmpty) return;
+    final removed = _driverOrderPreviewAnchors.remove(normalized) != null;
+    if (type != null) {
+      final numericId = int.tryParse(orderId);
+      if (numericId != null) {
+        Future.microtask(() async {
+          try {
+            await _api.releaseDriverOrderPreview(
+              id: numericId,
+              type: type,
+              reason: reason,
+            );
+          } on ApiException catch (error) {
+            _logRealtime(
+              'driver',
+              'preview_release_failed orderId=$orderId error=${error.message}',
+            );
+          } catch (_) {
+            _logRealtime(
+              'driver',
+              'preview_release_failed orderId=$orderId error=unknown',
+            );
+          }
+        });
+      }
+    }
+    if (removed) {
+      notifyListeners();
+    }
+  }
+
   Future<void> refreshDriverDashboard({bool force = false}) async {
     if (!_currentUser.isDriver || !_currentUser.driverApproved) return;
     if (_driverContextLoading && !force) return;
@@ -677,7 +826,6 @@ class AppState extends ChangeNotifier {
         );
       }
       _driverAvailableOrders = pending;
-      _pruneExpiredDriverOrders();
       _driverActiveOrders = active;
       await _saveSessionSnapshot();
     } finally {
@@ -701,6 +849,11 @@ class AppState extends ChangeNotifier {
     _driverAvailableOrders = _driverAvailableOrders
         .where((item) => item.id != order.id)
         .toList();
+    endDriverOrderPreview(
+      order,
+      releaseHold: true,
+      reason: 'accepted',
+    );
 
     AppOrder accepted = order.copyWith(status: OrderStatus.active);
     try {
@@ -722,6 +875,43 @@ class AppState extends ChangeNotifier {
       accepted.copyWith(status: OrderStatus.active),
     );
     await _refreshDriverStatsOnly();
+    notifyListeners();
+  }
+
+  Future<void> confirmDriverOrder(AppOrder order) async {
+    if (!_currentUser.isDriver || !_currentUser.driverApproved) {
+      throw const ApiException(
+        'Driver account not approved yet',
+        statusCode: 403,
+      );
+    }
+    if (order.isConfirmed) return;
+    final numericId = int.tryParse(order.id);
+    if (numericId == null) {
+      throw const ApiException('Invalid order id', statusCode: 400);
+    }
+    final confirmed = await _api.confirmDriverOrder(
+      id: numericId,
+      type: order.type,
+    );
+    DateTime? confirmedAt;
+    final confirmedDate = confirmed['confirmed_at'] ?? confirmed['confirmedAt'];
+    if (confirmedDate != null) {
+      confirmedAt = _normalizeServerTimestamp(confirmedDate.toString());
+    }
+    _driverActiveOrders = _driverActiveOrders.map((item) {
+      if (item.id != order.id) return item;
+      return item.copyWith(
+        isConfirmed: true,
+        confirmedAt: confirmedAt ?? DateTime.now(),
+      );
+    }).toList();
+    _mergePassengerOrderFromDriverContext(
+      order.copyWith(
+        isConfirmed: true,
+        confirmedAt: confirmedAt ?? DateTime.now(),
+      ),
+    );
     notifyListeners();
   }
 
@@ -1044,6 +1234,14 @@ class AppState extends ChangeNotifier {
         _logRealtime('driver', 'order_accepted forwarding to handler');
         await _handleDriverOrderAcceptedEvent(payload);
         break;
+      case 'order_reserved':
+        _logRealtime('driver', 'order_reserved forwarding to handler');
+        await _handleDriverOrderReservedEvent(payload);
+        break;
+      case 'order_returned':
+        _logRealtime('driver', 'order_returned forwarding to handler');
+        await _handleDriverOrderReturnedEvent(payload);
+        break;
       case 'order_completed':
         _logRealtime('driver', 'order_completed forwarding to handler');
         await _handleDriverOrderCompletedEvent(payload);
@@ -1064,6 +1262,21 @@ class AppState extends ChangeNotifier {
           enforceUserCheck: false,
           announce: true,
         );
+        break;
+      case 'viewer_count':
+        final orderId = _stringify(payload['order_id']);
+        if (orderId.isEmpty) break;
+        final count = _tryParseInt(payload['count']) ?? 0;
+        final previous = _driverOrderViewerCounts[orderId];
+        if (count <= 0) {
+          if (previous != null) {
+            _driverOrderViewerCounts.remove(orderId);
+            notifyListeners();
+          }
+        } else if (previous != count) {
+          _driverOrderViewerCounts[orderId] = count;
+          notifyListeners();
+        }
         break;
       default:
         break;
@@ -1126,7 +1339,6 @@ class AppState extends ChangeNotifier {
       ..._driverAvailableOrders.where((item) => item.id != order.id),
     ];
     _driverAvailableOrders.sort(_driverOrderComparator);
-    _pruneExpiredDriverOrders();
     notifyListeners();
   }
 
@@ -1135,7 +1347,12 @@ class AppState extends ChangeNotifier {
     _driverAvailableOrders = _driverAvailableOrders
         .where((order) => order.id != orderId)
         .toList();
-    return before != _driverAvailableOrders.length;
+    final changed = before != _driverAvailableOrders.length;
+    if (changed) {
+      _driverOrderViewerCounts.remove(orderId);
+      releaseDriverOrderPreview(orderId);
+    }
+    return changed;
   }
 
   Future<void> _handleDriverOrderAcceptedEvent(
@@ -1177,6 +1394,95 @@ class AppState extends ChangeNotifier {
     if (shouldNotify) {
       notifyListeners();
     }
+  }
+
+  Future<void> _handleDriverOrderReservedEvent(
+    Map<String, dynamic> payload,
+  ) async {
+    final orderId = _stringify(payload['order_id']);
+    if (orderId.isEmpty) return;
+    final orderType = _orderTypeFromPayload(payload['order_type']);
+    final driverId = _tryParseInt(payload['driver_id']);
+
+    // If another driver reserved it, remove from available list
+    if (driverId != null && driverId != 0 && driverId != _driverProfileId) {
+      final removed = _removeDriverPendingOrder(orderId);
+      if (removed) {
+        notifyListeners();
+      }
+      return;
+    }
+
+    // If this driver reserved it, ensure we keep it tracked locally
+    final expiresRaw = payload['reserved_until']?.toString();
+    final expiresAt = _normalizeServerTimestamp(expiresRaw);
+    if (expiresAt != null) {
+      _driverOrderPreviewAnchors[orderId] = DateTime.now();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _handleDriverOrderReturnedEvent(
+    Map<String, dynamic> payload,
+  ) async {
+    final orderId = _stringify(payload['order_id']);
+    if (orderId.isEmpty) return;
+    final orderType = _orderTypeFromPayload(payload['order_type']);
+    final driverId = _tryParseInt(payload['driver_id']);
+
+    // If the current driver cancelled/rejected it, drop it locally right away.
+    if (driverId != null && driverId != 0 && driverId == _driverProfileId) {
+      final before = _driverAvailableOrders.length;
+      _driverAvailableOrders = _driverAvailableOrders
+          .where((order) => order.id != orderId)
+          .toList();
+      _driverOrderViewerCounts.remove(orderId);
+      releaseDriverOrderPreview(orderId, type: orderType);
+      if (before != _driverAvailableOrders.length) {
+        notifyListeners();
+      }
+      _logRealtime('driver', 'order_returned removed self-cancelled orderId=$orderId');
+      return;
+    }
+
+    // Clear viewer count so the order is interactable again
+    final removedCount = _driverOrderViewerCounts.remove(orderId) != null;
+
+    // If payload contains order snapshot, upsert directly
+    final rawOrder = payload['order'];
+    AppOrder? mapped;
+    if (rawOrder is Map<String, dynamic>) {
+      mapped = _driverOrderFromMap(
+        rawOrder,
+        orderType,
+        usePayloadStatus: true,
+      );
+    } else if (rawOrder is Map) {
+      mapped = _driverOrderFromMap(
+        Map<String, dynamic>.from(rawOrder),
+        orderType,
+        usePayloadStatus: true,
+      );
+    }
+
+    if (mapped != null) {
+      _upsertDriverPendingOrder(mapped);
+      if (!removedCount) return;
+      notifyListeners();
+      return;
+    }
+
+    // Fallback: refresh available orders
+    try {
+      final pending = await _loadDriverNewOrders();
+      _driverAvailableOrders = pending;
+      notifyListeners();
+    } on ApiException catch (error) {
+      _logRealtime(
+        'driver',
+        'order_returned refresh_failed orderId=$orderId error=${error.message}',
+      );
+    } catch (_) {}
   }
 
   Future<void> _handleDriverOrderCompletedEvent(
@@ -1442,6 +1748,8 @@ class AppState extends ChangeNotifier {
         scheduledAt: updated.scheduledAt ?? order.scheduledAt,
         driverStartTime: updated.driverStartTime ?? order.driverStartTime,
         driverEndTime: updated.driverEndTime ?? order.driverEndTime,
+        isConfirmed: updated.isConfirmed,
+        confirmedAt: updated.confirmedAt ?? order.confirmedAt,
       );
     }).toList();
 
@@ -1892,13 +2200,19 @@ class AppState extends ChangeNotifier {
   }
 
   Future<List<AppOrder>> _loadDriverNewOrders() async {
-    final response = await _api.fetchDriverNewOrders();
+    // Backend now exposes available orders via the active endpoint
+    // so new/pending orders are fetched from `/driver/orders/active`.
+    final response = await _api.fetchDriverActiveOrders();
     return _mapDriverNewOrders(response);
   }
 
   Future<List<AppOrder>> _loadDriverActiveOrders() async {
-    final response = await _api.fetchDriverActiveOrders();
-    return _mapDriverOrders(response, status: OrderStatus.active);
+    final response = await _api.fetchDriverAssignedOrders(status: 'accepted');
+    return _mapDriverOrders(
+      response,
+      status: OrderStatus.active,
+      usePayloadStatus: true,
+    );
   }
 
   DriverProfile _mapDriverProfile(Map<String, dynamic> json) {
@@ -1911,12 +2225,17 @@ class AppState extends ChangeNotifier {
   }
 
   List<AppOrder> _mapDriverNewOrders(Map<String, dynamic> payload) {
-    return _mapDriverOrders(payload, status: OrderStatus.pending);
+    return _mapDriverOrders(
+      payload,
+      status: OrderStatus.pending,
+      usePayloadStatus: true,
+    );
   }
 
   List<AppOrder> _mapDriverOrders(
     Map<String, dynamic> payload, {
-    required OrderStatus status,
+    OrderStatus? status,
+    bool usePayloadStatus = false,
   }) {
     final results = <AppOrder>[];
     final taxiOrders = payload['taxi_orders'];
@@ -1927,11 +2246,13 @@ class AppState extends ChangeNotifier {
             data,
             OrderType.taxi,
             status: status,
+            usePayloadStatus: usePayloadStatus,
           ),
           Map data => _driverOrderFromMap(
             Map<String, dynamic>.from(data),
             OrderType.taxi,
             status: status,
+            usePayloadStatus: usePayloadStatus,
           ),
           _ => null,
         };
@@ -1946,11 +2267,13 @@ class AppState extends ChangeNotifier {
             data,
             OrderType.delivery,
             status: status,
+            usePayloadStatus: usePayloadStatus,
           ),
           Map data => _driverOrderFromMap(
             Map<String, dynamic>.from(data),
             OrderType.delivery,
             status: status,
+            usePayloadStatus: usePayloadStatus,
           ),
           _ => null,
         };
@@ -1964,7 +2287,8 @@ class AppState extends ChangeNotifier {
   AppOrder? _driverOrderFromMap(
     Map<String, dynamic> json,
     OrderType type, {
-    OrderStatus status = OrderStatus.pending,
+    OrderStatus? status,
+    bool usePayloadStatus = false,
   }) {
     int parseInt(Object? value) {
       if (value is int) return value;
@@ -1975,6 +2299,17 @@ class AppState extends ChangeNotifier {
     double parseDouble(Object? value) {
       if (value is num) return value.toDouble();
       return double.tryParse('$value') ?? 0;
+    }
+
+    bool parseBool(Object? value) {
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      final normalized = value?.toString().trim().toLowerCase() ?? '';
+      if (normalized.isEmpty) return false;
+      return normalized == 'true' ||
+          normalized == '1' ||
+          normalized == 'yes' ||
+          normalized == 'ha';
     }
 
     final fromRegionId = parseInt(json['from_region_id']);
@@ -1993,12 +2328,32 @@ class AppState extends ChangeNotifier {
         ? json['item_type']?.toString()
         : json['note']?.toString();
     final createdAt = _normalizeServerTimestamp(json['created_at']?.toString());
-    if (status == OrderStatus.pending && !_isDriverOrderFresh(createdAt)) {
-      return null;
-    }
     final rawPrice = json['price'];
     final hasPrice = rawPrice != null && rawPrice.toString().trim().isNotEmpty;
     final parsedPrice = hasPrice ? parseDouble(rawPrice) : 0.0;
+    final customerName =
+        json['username']?.toString() ??
+        json['customer_name']?.toString() ??
+        json['user_name']?.toString();
+    final customerPhone =
+        json['telephone']?.toString() ??
+        json['phone_number']?.toString() ??
+        json['user_phone']?.toString() ??
+        (type == OrderType.delivery
+            ? (json['sender_telephone'] ?? json['receiver_telephone'])
+                  ?.toString()
+            : null);
+    final confirmedAt = _normalizeServerTimestamp(
+      json['confirmed_at']?.toString(),
+    );
+    final isConfirmed = parseBool(json['is_confirmed']);
+
+    final parsedStatus = usePayloadStatus
+        ? (_orderStatusFromValue(json['status']) ??
+            _orderStatusFromValue(json['order_status']))
+        : null;
+    final resolvedStatus =
+        parsedStatus ?? status ?? OrderStatus.pending;
 
     return AppOrder(
       id: (json['id'] ?? '').toString(),
@@ -2015,12 +2370,16 @@ class AppState extends ChangeNotifier {
       endTime: end,
       price: parsedPrice,
       priceAvailable: hasPrice,
-      status: status,
+      status: resolvedStatus,
       fromRegionId: fromRegionId,
       fromDistrictId: 0,
       toRegionId: toRegionId,
       toDistrictId: 0,
       note: note,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      isConfirmed: isConfirmed,
+      confirmedAt: confirmedAt,
     );
   }
 
@@ -2041,19 +2400,33 @@ class AppState extends ChangeNotifier {
     return a.compareTo(b);
   }
 
-  void _pruneExpiredDriverOrders() {
-    _driverAvailableOrders = _driverAvailableOrders
-        .where((order) => _isDriverOrderFresh(order.createdAt))
-        .toList();
+  void _pruneDriverPreviewAnchors() {
+    if (_driverOrderPreviewAnchors.isEmpty) return;
+    final now = DateTime.now();
+    final stale = <String>[];
+    _driverOrderPreviewAnchors.forEach((orderId, startedAt) {
+      if (startedAt.add(_driverOrderPreviewWindow).isBefore(now)) {
+        stale.add(orderId);
+      }
+    });
+    if (stale.isEmpty) return;
+    for (final orderId in stale) {
+      _driverOrderPreviewAnchors.remove(orderId);
+    }
   }
 
-  bool _isDriverOrderFresh(DateTime? timestamp) {
-    if (timestamp == null) return true;
-    final age = DateTime.now().difference(timestamp);
-    if (age.isNegative) {
-      return true;
-    }
-    return age <= _driverOrderFreshnessWindow;
+  void _emitDriverRealtimeCommand({
+    required String type,
+    required String orderId,
+    required OrderType orderType,
+  }) {
+    final numericId = int.tryParse(orderId);
+    if (numericId == null) return;
+    _realtime.sendDriverEvent({
+      'type': type,
+      'order_id': numericId,
+      'order_type': orderType.name,
+    });
   }
 
   DateTime? _normalizeServerTimestamp(String? value) {

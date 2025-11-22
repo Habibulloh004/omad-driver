@@ -170,6 +170,11 @@ class RealtimeGateway {
     );
   }
 
+  void sendDriverEvent(Map<String, Object?> payload) {
+    if (!_driverEnabled) return;
+    _send(_RealtimeChannel.driver, payload);
+  }
+
   void _send(_RealtimeChannel channel, Map<String, Object?> payload) {
     final socket = _channels[channel];
     if (socket == null) return;

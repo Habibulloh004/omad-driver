@@ -35,6 +35,10 @@ class AppOrder {
     this.scheduledAt,
     this.driverStartTime,
     this.driverEndTime,
+    this.customerName,
+    this.customerPhone,
+    this.isConfirmed = false,
+    this.confirmedAt,
   });
 
   factory AppOrder.fromJson(
@@ -117,6 +121,23 @@ class AppOrder {
     driverPhone ??= json['driver_phone']?.toString();
     vehicle ??= json['driver_car_model']?.toString();
     vehiclePlate ??= json['driver_car_number']?.toString();
+    final customerName =
+        json['username']?.toString() ??
+        json['customer_name']?.toString() ??
+        json['user_name']?.toString();
+    final customerPhone =
+        json['telephone']?.toString() ??
+        json['phone_number']?.toString() ??
+        json['user_phone']?.toString() ??
+        (orderType == OrderType.delivery
+            ? (json['sender_telephone'] ?? json['receiver_telephone'])
+                  ?.toString()
+            : null);
+    final confirmedAtRaw = json['confirmed_at'] ?? json['confirmation_time'];
+    final confirmedAt = confirmedAtRaw == null
+        ? null
+        : _parseDateTimeValue(confirmedAtRaw.toString());
+    final isConfirmed = _toBool(json['is_confirmed']);
 
     return AppOrder(
       id: (json['id'] ?? '').toString(),
@@ -147,6 +168,10 @@ class AppOrder {
       scheduledAt: scheduledAt,
       driverStartTime: actualStartTime,
       driverEndTime: actualEndTime,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      isConfirmed: isConfirmed,
+      confirmedAt: confirmedAt,
     );
   }
 
@@ -178,6 +203,10 @@ class AppOrder {
   final DateTime? scheduledAt;
   final TimeOfDay? driverStartTime;
   final TimeOfDay? driverEndTime;
+  final String? customerName;
+  final String? customerPhone;
+  final bool isConfirmed;
+  final DateTime? confirmedAt;
 
   bool get isTaxi => type == OrderType.taxi;
   bool get isDelivery => type == OrderType.delivery;
@@ -197,6 +226,10 @@ class AppOrder {
     TimeOfDay? driverEndTime,
     String? ownerId,
     DateTime? createdAt,
+    String? customerName,
+    String? customerPhone,
+    bool? isConfirmed,
+    DateTime? confirmedAt,
   }) {
     return AppOrder(
       id: id,
@@ -227,6 +260,10 @@ class AppOrder {
       scheduledAt: scheduledAt ?? this.scheduledAt,
       driverStartTime: driverStartTime ?? this.driverStartTime,
       driverEndTime: driverEndTime ?? this.driverEndTime,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
+      isConfirmed: isConfirmed ?? this.isConfirmed,
+      confirmedAt: confirmedAt ?? this.confirmedAt,
     );
   }
 
@@ -264,6 +301,10 @@ class AppOrder {
       scheduledAt: scheduledAt,
       driverStartTime: driverStartTime,
       driverEndTime: driverEndTime,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      isConfirmed: isConfirmed,
+      confirmedAt: confirmedAt,
     );
   }
 }
@@ -336,4 +377,15 @@ double? _toDouble(Object? value) {
   final sanitized = value.toString().trim();
   if (sanitized.isEmpty) return null;
   return double.tryParse(sanitized);
+}
+
+bool _toBool(Object? value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final normalized = value?.toString().trim().toLowerCase() ?? '';
+  if (normalized.isEmpty) return false;
+  return normalized == 'true' ||
+      normalized == '1' ||
+      normalized == 'yes' ||
+      normalized == 'ha';
 }
