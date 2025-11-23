@@ -35,6 +35,16 @@ class MobileTaxiApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
+            builder: (context, child) => ColoredBox(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: SafeArea(
+                top: false,
+                left: false,
+                right: false,
+                bottom: true,
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
             home: const RootShell(),
           );
         },
