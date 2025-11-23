@@ -42,7 +42,9 @@ class AppState extends ChangeNotifier {
     'superadmin',
   };
   static const String _uploadsOrigin = backendBaseUrl;
-  static const bool _notificationsMuted = true;
+  static const bool _notificationsMuted = false;
+  // Keep toast/alert popups muted while still fetching and showing notifications.
+  static const bool _notificationAlertsMuted = true;
 
   final ApiClient _api;
   final RealtimeGateway _realtime;
@@ -1487,7 +1489,10 @@ class AppState extends ChangeNotifier {
     }
 
     // Order updates already surface localized toasts via realtime handlers.
-    final shouldAnnounce = announce && !existing && !isOrderUpdate;
+    final shouldAnnounce = announce &&
+        !existing &&
+        !isOrderUpdate &&
+        !_notificationAlertsMuted;
     if (shouldAnnounce) {
       _enqueueUserRealtimeMessage(
         title: normalizedNotification.title,
@@ -1614,7 +1619,7 @@ class AppState extends ChangeNotifier {
     required String title,
     required String message,
   }) {
-    if (_notificationsMuted) return;
+    if (_notificationsMuted || _notificationAlertsMuted) return;
     if (title.isEmpty && message.isEmpty) return;
     _userRealtimeMessages.add((title: title, message: message));
     notifyListeners();
@@ -1624,7 +1629,7 @@ class AppState extends ChangeNotifier {
     required String title,
     required String message,
   }) {
-    if (_notificationsMuted) return;
+    if (_notificationsMuted || _notificationAlertsMuted) return;
     if (title.isEmpty && message.isEmpty) return;
     _driverRealtimeMessages.add((title: title, message: message));
     notifyListeners();
