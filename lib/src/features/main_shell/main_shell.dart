@@ -1,9 +1,12 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/design_tokens.dart';
 import '../../localization/localization_ext.dart';
+import '../../state/app_state.dart';
+import '../auth/auth_guard.dart';
 import '../delivery/delivery_page.dart';
 import '../driver/driver_dashboard.dart';
 import '../home/home_page.dart';
@@ -21,6 +24,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell>
     with SingleTickerProviderStateMixin {
+  static const int _profileTabIndex = 2;
   int _currentIndex = 0;
   late final List<Widget> _tabs;
   late final PageController _pageController;
@@ -42,6 +46,7 @@ class _MainShellState extends State<MainShell>
         onOrderTaxi: () => _openPage(const TaxiOrderPage()),
         onSendDelivery: () => _openPage(const DeliveryPage()),
         onOpenNotifications: () => _openPage(const NotificationsPage()),
+        onRequireLogin: _promptLogin,
       ),
       const OrdersPage(key: PageStorageKey('ordersTab')),
       ProfilePage(
@@ -60,40 +65,40 @@ class _MainShellState extends State<MainShell>
       duration: AppDurations.medium,
     );
     _jumpFade = _jumpController.drive(
-      TweenSequence<double>(
-        [
-          TweenSequenceItem(
-            tween: Tween<double>(begin: 1, end: 0).chain(
-              CurveTween(curve: Curves.easeInOutCubic),
-            ),
-            weight: 50,
-          ),
-          TweenSequenceItem(
-            tween: Tween<double>(begin: 0, end: 1).chain(
-              CurveTween(curve: Curves.easeInOutCubic),
-            ),
-            weight: 50,
-          ),
-        ],
-      ),
+      TweenSequence<double>([
+        TweenSequenceItem(
+          tween: Tween<double>(
+            begin: 1,
+            end: 0,
+          ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+          weight: 50,
+        ),
+        TweenSequenceItem(
+          tween: Tween<double>(
+            begin: 0,
+            end: 1,
+          ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+          weight: 50,
+        ),
+      ]),
     );
     _jumpScale = _jumpController.drive(
-      TweenSequence<double>(
-        [
-          TweenSequenceItem(
-            tween: Tween<double>(begin: 1, end: 0.96).chain(
-              CurveTween(curve: Curves.easeInOutCubic),
-            ),
-            weight: 50,
-          ),
-          TweenSequenceItem(
-            tween: Tween<double>(begin: 0.96, end: 1).chain(
-              CurveTween(curve: Curves.easeOutBack),
-            ),
-            weight: 50,
-          ),
-        ],
-      ),
+      TweenSequence<double>([
+        TweenSequenceItem(
+          tween: Tween<double>(
+            begin: 1,
+            end: 0.96,
+          ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+          weight: 50,
+        ),
+        TweenSequenceItem(
+          tween: Tween<double>(
+            begin: 0.96,
+            end: 1,
+          ).chain(CurveTween(curve: Curves.easeOutBack)),
+          weight: 50,
+        ),
+      ]),
     );
     _jumpController.addListener(_handleJumpTick);
     _jumpController.addStatusListener((status) {
@@ -135,8 +140,17 @@ class _MainShellState extends State<MainShell>
               controller: _pageController,
               physics: const BouncingScrollPhysics(),
               itemCount: _tabs.length,
-              onPageChanged: (index) {
+              onPageChanged: (index) async {
                 if (_currentIndex == index) return;
+                if (index == _profileTabIndex &&
+                    !await _promptLoginIfNeeded()) {
+                  _pageController.animateToPage(
+                    _currentIndex,
+                    duration: AppDurations.long,
+                    curve: Curves.easeInOutCubic,
+                  );
+                  return;
+                }
                 setState(() => _currentIndex = index);
               },
               itemBuilder: (context, index) {
@@ -165,8 +179,11 @@ class _MainShellState extends State<MainShell>
     );
   }
 
-  void _animateToPage(int index) {
+  void _animateToPage(int index) async {
     if (_currentIndex == index) return;
+    if (index == _profileTabIndex && !await _promptLoginIfNeeded()) {
+      return;
+    }
     final currentPage = _pageController.hasClients
         ? (_pageController.page ?? _currentIndex.toDouble())
         : _currentIndex.toDouble();
@@ -194,6 +211,16 @@ class _MainShellState extends State<MainShell>
       _currentIndex = index;
       _isDirectJump = true;
     });
+  }
+
+  Future<bool> _promptLoginIfNeeded() async {
+    final state = context.read<AppState>();
+    if (state.isAuthenticated) return true;
+    return _promptLogin();
+  }
+
+  Future<bool> _promptLogin() {
+    return ensureLoggedIn(context, showMessage: false);
   }
 
   void _handleJumpTick() {

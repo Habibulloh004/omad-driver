@@ -93,10 +93,11 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
     FocusScope.of(context).unfocus();
     setState(() => loading = true);
     try {
-      await context.read<AppState>().login(
-        phone: phone,
-        password: password,
-      );
+      await context.read<AppState>().login(phone: phone, password: password);
+      if (!mounted) return;
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      }
     } on ApiException catch (error) {
       if (!mounted) return;
       _showSnack(error.message);
@@ -140,6 +141,10 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
         password: password,
         confirmPassword: confirm,
       );
+      if (!mounted) return;
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      }
     } on ApiException catch (error) {
       if (!mounted) return;
       _showSnack(error.message);

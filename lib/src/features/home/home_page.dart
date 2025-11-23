@@ -19,11 +19,13 @@ class HomePage extends StatefulWidget {
     required this.onOrderTaxi,
     required this.onSendDelivery,
     required this.onOpenNotifications,
+    this.onRequireLogin,
   });
 
   final VoidCallback onOrderTaxi;
   final VoidCallback onSendDelivery;
   final VoidCallback onOpenNotifications;
+  final Future<bool> Function()? onRequireLogin;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -50,8 +52,24 @@ class _HomePageState extends State<HomePage> {
     _drainUserRealtimeToasts(state);
     final strings = context.strings;
     final user = state.currentUser;
+    final isAuthenticated = state.isAuthenticated;
+    final displayName = user.fullName.trim().isEmpty
+        ? strings.tr('guestUser')
+        : user.fullName;
+    final phoneLabel =
+        (user.phoneNumber.trim().isEmpty ||
+            user.phoneNumber.trim().toLowerCase() == 'n/a')
+        ? strings.tr('guestPhone')
+        : user.phoneNumber;
     final activeOrders = state.activeOrders.take(20).toList();
     final historyOrders = state.historyOrders.take(5).toList();
+    final activeEmptyText = isAuthenticated
+        ? strings.tr('noActiveOrders')
+        : strings.tr('loginToSeeOrders');
+    final historyEmptyText = isAuthenticated
+        ? strings.tr('noHistory')
+        : strings.tr('loginToSeeOrders');
+    final canOrder = isAuthenticated;
     final hasUnreadNotifications = state.notifications.any(
       (notification) => !notification.isRead,
     );
@@ -93,7 +111,11 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         _NotificationButton(
-                          onTap: widget.onOpenNotifications,
+                          onTap: isAuthenticated
+                              ? widget.onOpenNotifications
+                              : () {
+                                  _requestLogin();
+                                },
                           hasUnread: hasUnreadNotifications,
                           activationToken: notificationSignal,
                         ),
@@ -127,7 +149,7 @@ class _HomePageState extends State<HomePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      user.fullName,
+                                      displayName,
                                       style: theme.textTheme.titleLarge
                                           ?.copyWith(
                                             fontWeight: FontWeight.w700,
@@ -144,7 +166,7 @@ class _HomePageState extends State<HomePage> {
                                           color: theme.colorScheme.primary,
                                         ),
                                         const SizedBox(width: AppSpacing.xs),
-                                        Text(user.phoneNumber),
+                                        Text(phoneLabel),
                                       ],
                                     ),
                                     const SizedBox(height: AppSpacing.xs),
@@ -173,9 +195,19 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                               IconButton(
-                                onPressed: () => _showChangePassword(context),
-                                icon: const Icon(Icons.settings_rounded),
-                                tooltip: strings.tr('changePassword'),
+                                onPressed: isAuthenticated
+                                    ? () => _showChangePassword(context)
+                                    : () {
+                                        _requestLogin();
+                                      },
+                                icon: Icon(
+                                  isAuthenticated
+                                      ? Icons.settings_rounded
+                                      : Icons.login_rounded,
+                                ),
+                                tooltip: isAuthenticated
+                                    ? strings.tr('changePassword')
+                                    : strings.tr('loginTitle'),
                               ),
                             ],
                           ),
@@ -185,12 +217,14 @@ class _HomePageState extends State<HomePage> {
                               const double horizontalGap = AppSpacing.lg;
                               const double verticalGap = AppSpacing.md;
                               final taxiButton = GradientButton(
-                                onPressed: widget.onOrderTaxi,
+                                onPressed: canOrder ? widget.onOrderTaxi : null,
                                 label: strings.tr('orderTaxi'),
                                 icon: Icons.local_taxi_rounded,
                               );
                               final deliveryButton = GradientButton(
-                                onPressed: widget.onSendDelivery,
+                                onPressed: canOrder
+                                    ? widget.onSendDelivery
+                                    : null,
                                 label: strings.tr('sendDelivery'),
                                 icon: Icons.delivery_dining_rounded,
                               );
@@ -214,6 +248,35 @@ class _HomePageState extends State<HomePage> {
                               );
                             },
                           ),
+                          if (!canOrder) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.lock_outline_rounded,
+                                  color: theme.colorScheme.primary,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(
+                                  child: Text(
+                                    strings.tr('loginToOrder'),
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    _requestLogin();
+                                  },
+                                  child: Text(strings.tr('loginTitle')),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -263,7 +326,7 @@ class _HomePageState extends State<HomePage> {
                           if (activeOrders.isEmpty)
                             _EmptyCard(
                               width: highlightWidth,
-                              message: strings.tr('noActiveOrders'),
+                              message: activeEmptyText,
                             )
                           else
                             for (var i = 0; i < activeOrders.length; i++) ...[
@@ -292,7 +355,7 @@ class _HomePageState extends State<HomePage> {
                     if (historyOrders.isEmpty)
                       _EmptyCard(
                         width: double.infinity,
-                        message: strings.tr('noHistory'),
+                        message: historyEmptyText,
                       )
                     else
                       Column(
@@ -313,6 +376,19 @@ class _HomePageState extends State<HomePage> {
         ),
       ],
     );
+  }
+
+  Future<void> _requestLogin() async {
+    final handler = widget.onRequireLogin;
+    if (handler != null) {
+      await handler();
+      return;
+    }
+    if (!mounted) return;
+    final strings = context.strings;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(strings.tr('loginRequired'))));
   }
 
   void _animateActiveOrdersScroll({

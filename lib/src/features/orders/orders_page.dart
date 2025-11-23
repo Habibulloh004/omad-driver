@@ -7,6 +7,7 @@ import '../../core/design_tokens.dart';
 import '../../localization/localization_ext.dart';
 import '../../models/order.dart';
 import '../../state/app_state.dart';
+import '../auth/auth_guard.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/pill_tabs.dart';
 
@@ -43,18 +44,23 @@ class _OrdersPageState extends State<OrdersPage>
     final state = context.watch<AppState>();
     final strings = context.strings;
     _drainUserRealtimeToasts(state);
+    final isAuthenticated = state.isAuthenticated;
+    if (!isAuthenticated) {
+      return _GuestOrdersPlaceholder(
+        message: strings.tr('loginToSeeOrders'),
+        onLogin: () => ensureLoggedIn(context),
+      );
+    }
     final activeOrders = state.activeOrders;
     final historyOrders = state.historyOrders;
     const activeMoreThreshold = 20;
     const historyMoreThreshold = 20;
-    bool _hasMoreFor({
-      required List<AppOrder> orders,
-      required bool isActive,
-    }) {
+    bool _hasMoreFor({required List<AppOrder> orders, required bool isActive}) {
       final threshold = isActive ? activeMoreThreshold : historyMoreThreshold;
       // Only show "More" when we've reached the tab threshold and backend reports more pages.
       return orders.length >= threshold && state.hasMoreOrders;
     }
+
     final activeHasMore = _hasMoreFor(orders: activeOrders, isActive: true);
     final historyHasMore = _hasMoreFor(orders: historyOrders, isActive: false);
     final mediaPadding = MediaQuery.of(context).padding;
@@ -121,10 +127,12 @@ class _OrdersPageState extends State<OrdersPage>
                     itemBuilder: (context, index) {
                       final isActiveTab = index == 0;
                       final orders = isActiveTab ? activeOrders : historyOrders;
-                      final hasMoreForTab =
-                          isActiveTab ? activeHasMore : historyHasMore;
+                      final hasMoreForTab = isActiveTab
+                          ? activeHasMore
+                          : historyHasMore;
                       final showTopMoreButton =
-                          isActiveTab && hasMoreForTab; // keep top button only for active
+                          isActiveTab &&
+                          hasMoreForTab; // keep top button only for active
                       final emptyText = isActiveTab
                           ? strings.tr('noActiveOrders')
                           : strings.tr('noHistory');
@@ -134,19 +142,21 @@ class _OrdersPageState extends State<OrdersPage>
                       final showLoaderRow = isLoadingMore || showMoreButton;
                       final child = orders.isEmpty
                           ? (isLoadingMore
-                              ? const Center(child: CircularProgressIndicator())
-                              : Center(
-                                  key: ValueKey('empty-$index'),
-                                  child: Text(
-                                    emptyText,
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.6),
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : Center(
+                                    key: ValueKey('empty-$index'),
+                                    child: Text(
+                                      emptyText,
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            color: theme.colorScheme.onSurface
+                                                .withValues(alpha: 0.6),
+                                          ),
+                                      textAlign: TextAlign.center,
                                     ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                            ))
+                                  ))
                           : ListView.separated(
                               key: PageStorageKey('orders-$index'),
                               physics: const BouncingScrollPhysics(),
@@ -155,7 +165,8 @@ class _OrdersPageState extends State<OrdersPage>
                                 top: AppSpacing.sm,
                                 bottom: bottomSpacing,
                               ),
-                              itemCount: orders.length +
+                              itemCount:
+                                  orders.length +
                                   (showTopMoreButton ? 1 : 0) +
                                   (showLoaderRow ? 1 : 0),
                               separatorBuilder: (_, __) =>
@@ -212,8 +223,7 @@ class _OrdersPageState extends State<OrdersPage>
                                   ),
                                   child: _OrderCard(
                                     order: order,
-                                    onTap: () =>
-                                        _openDetails(context, order),
+                                    onTap: () => _openDetails(context, order),
                                   ),
                                 );
                               },
@@ -447,6 +457,56 @@ class _OrdersPageState extends State<OrdersPage>
         messenger.showSnackBar(SnackBar(content: Text(text)));
       }
     });
+  }
+}
+
+class _GuestOrdersPlaceholder extends StatelessWidget {
+  const _GuestOrdersPlaceholder({required this.message, required this.onLogin});
+
+  final String message;
+  final Future<bool> Function() onLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mediaPadding = MediaQuery.of(context).padding;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md + mediaPadding.left,
+        AppSpacing.lg + mediaPadding.top,
+        AppSpacing.md + mediaPadding.right,
+        mediaPadding.bottom + AppSpacing.xxl,
+      ),
+      child: Center(
+        child: GlassCard(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 42,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              FilledButton.icon(
+                onPressed: () => onLogin(),
+                icon: const Icon(Icons.login_rounded),
+                label: Text(context.strings.tr('loginTitle')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

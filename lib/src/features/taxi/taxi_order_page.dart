@@ -13,6 +13,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/glass_dialog.dart';
 import '../../widgets/gradient_button.dart';
+import '../auth/auth_guard.dart';
 import '../common/order_sent_page.dart';
 import 'pickup_location_picker_page.dart';
 
@@ -55,6 +56,8 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     final strings = context.strings;
     final regions = state.regions;
     final price = _calculatePrice(state);
+    final isAuthenticated = state.isAuthenticated;
+    final canSubmitOrder = isAuthenticated;
 
     final ready =
         fromRegion != null &&
@@ -292,15 +295,26 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                     !ready
                         ? strings.tr('fillInfoForPrice')
                         : price == null
-                            ? strings.tr('priceUnspecified')
-                            : _formatPrice(price),
+                        ? strings.tr('priceUnspecified')
+                        : _formatPrice(price),
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  if (!canSubmitOrder) ...[
+                    Text(
+                      strings.tr('loginToOrder'),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   GradientButton(
-                    onPressed: !ready || confirming
+                    onPressed: !ready || confirming || !canSubmitOrder
                         ? null
                         : () => _showSummary(price),
                     label: strings.tr('confirmOrder'),
@@ -377,9 +391,8 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
   Future<void> _openPickupLocationPicker() async {
     final selected = await Navigator.of(context).push<PickupLocation>(
       MaterialPageRoute(
-        builder: (_) => PickupLocationPickerPage(
-          initialLocation: pickupLocation,
-        ),
+        builder: (_) =>
+            PickupLocationPickerPage(initialLocation: pickupLocation),
       ),
     );
     if (selected != null && mounted) {
@@ -388,8 +401,7 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
   }
 
   String _pickupAddressLabel(AppLocalizations strings) {
-    if (pickupLocation != null &&
-        pickupLocation!.address.trim().isNotEmpty) {
+    if (pickupLocation != null && pickupLocation!.address.trim().isNotEmpty) {
       return pickupLocation!.address;
     }
     if (pickupLocation != null) {
@@ -423,6 +435,13 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     await Future.delayed(const Duration(milliseconds: 350));
     if (!mounted) return;
     final strings = context.strings;
+    if (!context.read<AppState>().isAuthenticated) {
+      await ensureLoggedIn(context);
+      if (mounted) {
+        setState(() => confirming = false);
+      }
+      return;
+    }
 
     await showGlassDialog(
       context: context,
@@ -455,7 +474,7 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                   label: dialogStrings.tr('pickupAddress'),
                   value: pickupLocation!.address.trim().isEmpty
                       ? '${pickupLocation!.latitude.toStringAsFixed(5)}, '
-                          '${pickupLocation!.longitude.toStringAsFixed(5)}'
+                            '${pickupLocation!.longitude.toStringAsFixed(5)}'
                       : pickupLocation!.address,
                 ),
               _SummaryRow(
@@ -508,10 +527,17 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
   Future<void> _sendOrder() async {
     final state = context.read<AppState>();
     final strings = context.strings;
+    final loggedIn = await ensureLoggedIn(context, showMessage: false);
+    if (!loggedIn) {
+      if (mounted) {
+        setState(() => confirming = false);
+      }
+      return;
+    }
     if (pickupLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.tr('tapToPickOnMap'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.tr('tapToPickOnMap'))));
       return;
     }
     try {

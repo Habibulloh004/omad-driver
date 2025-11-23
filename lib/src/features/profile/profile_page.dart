@@ -9,6 +9,7 @@ import '../../state/app_state.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/glass_dialog.dart';
 import '../../widgets/gradient_button.dart';
+import '../auth/auth_guard.dart';
 import '../driver/driver_application_page.dart';
 import 'edit_profile_photo_page.dart';
 
@@ -28,6 +29,10 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final strings = context.strings;
+    final isAuthenticated = state.isAuthenticated;
+    if (!isAuthenticated) {
+      return _ProfileLoginGate(onLogin: () => ensureLoggedIn(context));
+    }
     final user = state.currentUser;
     final mediaPadding = MediaQuery.of(context).padding;
     final theme = Theme.of(context);
@@ -38,12 +43,12 @@ class _ProfilePageState extends State<ProfilePage> {
     final driverButtonLabel = hasApprovedDriverAccess
         ? strings.tr('switchToDriver')
         : pendingDriverReview
-            ? strings.tr('applicationPending')
-            : strings.tr('becomeDriver');
+        ? strings.tr('applicationPending')
+        : strings.tr('becomeDriver');
     final VoidCallback? driverButtonAction =
         (hasApprovedDriverAccess || (!pendingDriverReview && !user.isDriver))
-            ? () => _handleDriverNavigation(context)
-            : null;
+        ? () => _handleDriverNavigation(context)
+        : null;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -478,6 +483,56 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() => _refreshingProfile = false);
       }
     }
+  }
+}
+
+class _ProfileLoginGate extends StatelessWidget {
+  const _ProfileLoginGate({required this.onLogin});
+
+  final Future<bool> Function() onLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final theme = Theme.of(context);
+    final mediaPadding = MediaQuery.of(context).padding;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md + mediaPadding.left,
+        AppSpacing.lg + mediaPadding.top,
+        AppSpacing.md + mediaPadding.right,
+        mediaPadding.bottom + AppSpacing.xxl,
+      ),
+      child: Center(
+        child: GlassCard(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 48,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                strings.tr('loginRequired'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              FilledButton.icon(
+                onPressed: () => onLogin(),
+                icon: const Icon(Icons.login_rounded),
+                label: Text(strings.tr('loginTitle')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

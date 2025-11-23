@@ -13,6 +13,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/glass_dialog.dart';
 import '../../widgets/gradient_button.dart';
+import '../auth/auth_guard.dart';
 import '../common/order_sent_page.dart';
 import '../taxi/pickup_location_picker_page.dart';
 
@@ -47,8 +48,13 @@ class _DeliveryPageState extends State<DeliveryPage> {
   void initState() {
     super.initState();
     final state = context.read<AppState>();
-    senderNameCtrl.text = state.currentUser.fullName;
-    senderPhoneCtrl.text = state.currentUser.phoneNumber;
+    final user = state.currentUser;
+    senderNameCtrl.text = user.fullName.toLowerCase() == 'unknown'
+        ? ''
+        : user.fullName;
+    senderPhoneCtrl.text = user.phoneNumber.trim().startsWith('+')
+        ? user.phoneNumber
+        : '+998';
     receiverPhoneCtrl.text = '+998';
     _detectInitialPickupLocation();
   }
@@ -68,6 +74,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
     final strings = context.strings;
     final regions = state.regions;
     final price = _calculatePrice(state);
+    final isAuthenticated = state.isAuthenticated;
+    final canSubmitOrder = isAuthenticated;
 
     final ready =
         fromRegion != null &&
@@ -360,15 +368,26 @@ class _DeliveryPageState extends State<DeliveryPage> {
                     !ready
                         ? strings.tr('fillInfoForPrice')
                         : price == null
-                            ? strings.tr('priceUnspecified')
-                            : _formatPrice(price),
+                        ? strings.tr('priceUnspecified')
+                        : _formatPrice(price),
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  if (!canSubmitOrder) ...[
+                    Text(
+                      strings.tr('loginToOrder'),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   GradientButton(
-                    onPressed: !ready || confirming
+                    onPressed: !ready || confirming || !canSubmitOrder
                         ? null
                         : () => _showSummary(price),
                     label: strings.tr('confirmDelivery'),
@@ -445,9 +464,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
   Future<void> _openPickupLocationPicker() async {
     final selected = await Navigator.of(context).push<PickupLocation>(
       MaterialPageRoute(
-        builder: (_) => PickupLocationPickerPage(
-          initialLocation: pickupLocation,
-        ),
+        builder: (_) =>
+            PickupLocationPickerPage(initialLocation: pickupLocation),
       ),
     );
     if (selected != null && mounted) {
@@ -458,9 +476,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
   Future<void> _openDropoffLocationPicker() async {
     final selected = await Navigator.of(context).push<PickupLocation>(
       MaterialPageRoute(
-        builder: (_) => PickupLocationPickerPage(
-          initialLocation: dropoffLocation,
-        ),
+        builder: (_) =>
+            PickupLocationPickerPage(initialLocation: dropoffLocation),
       ),
     );
     if (selected != null && mounted) {
@@ -497,7 +514,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
   String _formatLocation(PickupLocation location) {
     return location.address.trim().isEmpty
         ? '${location.latitude.toStringAsFixed(5)}, '
-            '${location.longitude.toStringAsFixed(5)}'
+              '${location.longitude.toStringAsFixed(5)}'
         : location.address;
   }
 
@@ -522,6 +539,13 @@ class _DeliveryPageState extends State<DeliveryPage> {
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
     final strings = context.strings;
+    if (!context.read<AppState>().isAuthenticated) {
+      await ensureLoggedIn(context);
+      if (mounted) {
+        setState(() => confirming = false);
+      }
+      return;
+    }
 
     await showGlassDialog(
       context: context,
@@ -608,10 +632,17 @@ class _DeliveryPageState extends State<DeliveryPage> {
   Future<void> _sendOrder() async {
     final state = context.read<AppState>();
     final strings = context.strings;
+    final loggedIn = await ensureLoggedIn(context, showMessage: false);
+    if (!loggedIn) {
+      if (mounted) {
+        setState(() => confirming = false);
+      }
+      return;
+    }
     if (pickupLocation == null || dropoffLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.tr('tapToPickOnMap'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.tr('tapToPickOnMap'))));
       return;
     }
     try {
@@ -641,11 +672,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
       Navigator.pushReplacement(
         context,
         PageRouteBuilder<void>(
-          pageBuilder: (_, __, ___) => OrderSentPage(
-            title: title,
-            message: message,
-            orderId: orderId,
-          ),
+          pageBuilder: (_, __, ___) =>
+              OrderSentPage(title: title, message: message, orderId: orderId),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
           },

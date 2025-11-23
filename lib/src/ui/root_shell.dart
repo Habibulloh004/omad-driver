@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../features/main_shell/main_shell.dart';
-import '../features/auth/auth_flow.dart';
 import '../core/design_tokens.dart';
 import '../state/app_state.dart';
 
@@ -19,14 +18,11 @@ class RootShell extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        final isAuthenticated = state.isAuthenticated;
-        return AnimatedSwitcher(
+        return const AnimatedSwitcher(
           duration: AppDurations.medium,
           switchInCurve: Curves.easeInOutCubic,
           switchOutCurve: Curves.easeInOutCubic,
-          child: isAuthenticated
-              ? const MainShell(key: ValueKey('main-shell'))
-              : const AuthFlow(key: ValueKey('auth-flow')),
+          child: MainShell(key: ValueKey('main-shell')),
         );
       },
     );

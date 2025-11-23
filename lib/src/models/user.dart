@@ -14,13 +14,13 @@ class AppUser {
 
   factory AppUser.empty() {
     return AppUser(
-      id: '',
-      fullName: '',
-      phoneNumber: '',
+      id: 'guest',
+      fullName: 'Unknown',
+      phoneNumber: 'N/A',
       avatarUrl: '',
       rating: 0,
       language: 'uz_latin',
-      role: 'user',
+      role: 'guest',
       isDriver: false,
       driverApproved: false,
       balance: 0,
@@ -92,8 +92,8 @@ class AppUser {
       language: language ?? this.language,
       role: role ?? this.role,
       isDriver: resolvedIsDriver,
-      driverApproved: driverApproved ??
-          (resolvedIsDriver ? this.driverApproved : false),
+      driverApproved:
+          driverApproved ?? (resolvedIsDriver ? this.driverApproved : false),
       balance: balance ?? this.balance,
     );
   }
