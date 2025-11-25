@@ -352,6 +352,8 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchDriverNewOrders({
     int? fromRegionId,
     int? toRegionId,
+    int? regionId,
+    OrderType? orderType,
     int? limit,
     int? offset,
   }) async {
@@ -361,6 +363,12 @@ class ApiClient {
     }
     if (toRegionId != null) {
       query['to_region_id'] = toRegionId;
+    }
+    if (regionId != null) {
+      query['region_id'] = regionId;
+    }
+    if (orderType != null) {
+      query['order_type'] = orderType.name;
     }
     if (limit != null) query['limit'] = limit;
     if (offset != null) query['offset'] = offset;
@@ -376,6 +384,8 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchDriverActiveOrders({
     int? fromRegionId,
     int? toRegionId,
+    int? regionId,
+    OrderType? orderType,
     int? limit,
     int? offset,
   }) async {
@@ -385,6 +395,12 @@ class ApiClient {
     }
     if (toRegionId != null) {
       query['to_region_id'] = toRegionId;
+    }
+    if (regionId != null) {
+      query['region_id'] = regionId;
+    }
+    if (orderType != null) {
+      query['order_type'] = orderType.name;
     }
     if (limit != null) query['limit'] = limit;
     if (offset != null) query['offset'] = offset;

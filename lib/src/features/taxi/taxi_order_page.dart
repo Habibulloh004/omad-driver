@@ -13,6 +13,7 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/glass_dialog.dart';
 import '../../widgets/gradient_button.dart';
+import '../../widgets/cupertino_wheel_time_picker.dart';
 import '../auth/auth_guard.dart';
 import '../common/order_sent_page.dart';
 import 'pickup_location_picker_page.dart';
@@ -343,8 +344,8 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
   }
 
   Future<void> _selectScheduledTime() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await showCupertinoWheelTimePicker(
+      context,
       initialTime: scheduledTime,
     );
     if (picked != null) {
@@ -613,17 +614,21 @@ class _SummaryRow extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '$label:',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(child: Text(value, style: theme.textTheme.bodyLarge)),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
+          ),
         ],
       ),
     );

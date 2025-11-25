@@ -20,6 +20,8 @@ const _lightOutline = Color(0xFFD9DEF2);
 const _lightOutlineVariant = Color(0xFFE7EBFA);
 const _darkOutline = Color(0xFF273349);
 const _darkOutlineVariant = Color(0xFF303D56);
+const _fontFamily = 'Urbanist';
+const _fontFamilyFallback = ['NotoSans'];
 
 TextTheme _buildTextTheme({
   required TextTheme base,
@@ -419,7 +421,8 @@ ThemeData _buildTheme({
   return ThemeData(
     colorScheme: colorScheme,
     brightness: colorScheme.brightness,
-    fontFamily: 'Urbanist',
+    fontFamily: _fontFamily,
+    fontFamilyFallback: _fontFamilyFallback,
     textTheme: textTheme,
     scaffoldBackgroundColor: scaffoldBackground,
     useMaterial3: true,

@@ -8,6 +8,9 @@ import 'localization/app_localizations.dart';
 import 'state/app_state.dart';
 import 'ui/root_shell.dart';
 
+const _fontFamily = 'Urbanist';
+const _fontFamilyFallback = ['NotoSans'];
+
 class MobileTaxiApp extends StatelessWidget {
   const MobileTaxiApp({super.key});
 
@@ -58,5 +61,8 @@ TextTheme _urbanistTextTheme(Brightness brightness) {
   final base = brightness == Brightness.dark
       ? typography.white
       : typography.black;
-  return base.apply(fontFamily: 'Urbanist');
+  return base.apply(
+    fontFamily: _fontFamily,
+    fontFamilyFallback: _fontFamilyFallback,
+  );
 }

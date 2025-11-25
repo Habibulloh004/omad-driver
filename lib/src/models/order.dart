@@ -20,6 +20,7 @@ class AppOrder {
     required this.startTime,
     required this.endTime,
     required this.price,
+    this.serviceFee = 0,
     this.priceAvailable = false,
     required this.status,
     required this.fromRegionId,
@@ -39,6 +40,9 @@ class AppOrder {
     this.customerPhone,
     this.isConfirmed = false,
     this.confirmedAt,
+    this.pickupLatitude,
+    this.pickupLongitude,
+    this.pickupAddress,
   });
 
   factory AppOrder.fromJson(
@@ -96,6 +100,9 @@ class AppOrder {
     final parsedPrice = _toDouble(priceSource);
     final price = parsedPrice ?? 0.0;
     final hasPrice = parsedPrice != null;
+    final rawServiceFee =
+        json['service_fee'] ?? json['serviceFee'] ?? json['service_fee_amount'];
+    final serviceFee = _toDouble(rawServiceFee) ?? 0.0;
     final ownerId = (json['user_id'] ?? json['customer_id'] ?? '').toString();
     final createdAtRaw = json['created_at'] ?? json['createdAt'];
     final createdAt = createdAtRaw == null
@@ -138,6 +145,21 @@ class AppOrder {
         ? null
         : _parseDateTimeValue(confirmedAtRaw.toString());
     final isConfirmed = _toBool(json['is_confirmed']);
+    final pickupLatitude = _toDouble(
+      json['pickup_latitude'] ??
+          json['pickup_lat'] ??
+          json['from_latitude'] ??
+          json['latitude'],
+    );
+    final pickupLongitude = _toDouble(
+      json['pickup_longitude'] ??
+          json['pickup_lng'] ??
+          json['from_longitude'] ??
+          json['longitude'],
+    );
+    final pickupAddress =
+        (json['pickup_address'] ?? json['address'] ?? json['from_address'])
+            ?.toString();
 
     return AppOrder(
       id: (json['id'] ?? '').toString(),
@@ -153,6 +175,7 @@ class AppOrder {
       startTime: startTime,
       endTime: endTime,
       price: price,
+      serviceFee: serviceFee,
       priceAvailable: hasPrice,
       status: orderStatus,
       fromRegionId: fromRegionId,
@@ -172,6 +195,9 @@ class AppOrder {
       customerPhone: customerPhone,
       isConfirmed: isConfirmed,
       confirmedAt: confirmedAt,
+      pickupLatitude: pickupLatitude,
+      pickupLongitude: pickupLongitude,
+      pickupAddress: pickupAddress,
     );
   }
 
@@ -188,6 +214,7 @@ class AppOrder {
   final TimeOfDay startTime;
   final TimeOfDay endTime;
   final double price;
+  final double serviceFee;
   final bool priceAvailable;
   final OrderStatus status;
   final int fromRegionId;
@@ -207,6 +234,9 @@ class AppOrder {
   final String? customerPhone;
   final bool isConfirmed;
   final DateTime? confirmedAt;
+  final double? pickupLatitude;
+  final double? pickupLongitude;
+  final String? pickupAddress;
 
   bool get isTaxi => type == OrderType.taxi;
   bool get isDelivery => type == OrderType.delivery;
@@ -219,6 +249,7 @@ class AppOrder {
     String? vehiclePlate,
     String? note,
     double? price,
+    double? serviceFee,
     bool? priceAvailable,
     String? cancelReason,
     DateTime? scheduledAt,
@@ -230,6 +261,9 @@ class AppOrder {
     String? customerPhone,
     bool? isConfirmed,
     DateTime? confirmedAt,
+    double? pickupLatitude,
+    double? pickupLongitude,
+    String? pickupAddress,
   }) {
     return AppOrder(
       id: id,
@@ -245,6 +279,7 @@ class AppOrder {
       startTime: startTime,
       endTime: endTime,
       price: price ?? this.price,
+      serviceFee: serviceFee ?? this.serviceFee,
       priceAvailable: priceAvailable ?? this.priceAvailable,
       status: status ?? this.status,
       fromRegionId: fromRegionId,
@@ -264,6 +299,9 @@ class AppOrder {
       customerPhone: customerPhone ?? this.customerPhone,
       isConfirmed: isConfirmed ?? this.isConfirmed,
       confirmedAt: confirmedAt ?? this.confirmedAt,
+      pickupLatitude: pickupLatitude ?? this.pickupLatitude,
+      pickupLongitude: pickupLongitude ?? this.pickupLongitude,
+      pickupAddress: pickupAddress ?? this.pickupAddress,
     );
   }
 
@@ -287,6 +325,7 @@ class AppOrder {
       startTime: startTime,
       endTime: endTime,
       price: price,
+      serviceFee: serviceFee,
       status: status,
       fromRegionId: fromRegionId,
       fromDistrictId: fromDistrictId,
@@ -305,6 +344,9 @@ class AppOrder {
       customerPhone: customerPhone,
       isConfirmed: isConfirmed,
       confirmedAt: confirmedAt,
+      pickupLatitude: pickupLatitude,
+      pickupLongitude: pickupLongitude,
+      pickupAddress: pickupAddress,
     );
   }
 }

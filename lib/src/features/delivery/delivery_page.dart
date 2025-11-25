@@ -12,6 +12,7 @@ import '../../state/app_state.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/glass_dialog.dart';
+import '../../widgets/cupertino_wheel_time_picker.dart';
 import '../../widgets/gradient_button.dart';
 import '../auth/auth_guard.dart';
 import '../common/order_sent_page.dart';
@@ -84,7 +85,6 @@ class _DeliveryPageState extends State<DeliveryPage> {
         toDistrict != null &&
         fromRegion != toRegion &&
         pickupLocation != null &&
-        dropoffLocation != null &&
         receiverPhoneCtrl.text.isNotEmpty;
 
     return Scaffold(
@@ -261,25 +261,6 @@ class _DeliveryPageState extends State<DeliveryPage> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  _SectionLabel(label: strings.tr('dropoffAddress')),
-                  const SizedBox(height: AppSpacing.xxs),
-                  GestureDetector(
-                    onTap: _openDropoffLocationPicker,
-                    behavior: HitTestBehavior.opaque,
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        hintText: strings.tr('tapToPickOnMap'),
-                        suffixIcon: const Icon(Icons.place_outlined),
-                      ),
-                      isEmpty: dropoffLocation == null,
-                      child: dropoffLocation == null
-                          ? const SizedBox.shrink()
-                          : Text(
-                              _dropoffAddressLabel(strings),
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -416,8 +397,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
   }
 
   Future<void> _selectScheduledTime() async {
-    final picked = await showTimePicker(
-      context: context,
+    final picked = await showCupertinoWheelTimePicker(
+      context,
       initialTime: scheduledTime,
     );
     if (picked != null) {
@@ -474,15 +455,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
   }
 
   Future<void> _openDropoffLocationPicker() async {
-    final selected = await Navigator.of(context).push<PickupLocation>(
-      MaterialPageRoute(
-        builder: (_) =>
-            PickupLocationPickerPage(initialLocation: dropoffLocation),
-      ),
-    );
-    if (selected != null && mounted) {
-      setState(() => dropoffLocation = selected);
-    }
+    // Drop-off is determined by region/district; map picker disabled.
   }
 
   String _pickupAddressLabel(AppLocalizations strings) {
@@ -491,6 +464,18 @@ class _DeliveryPageState extends State<DeliveryPage> {
 
   String _dropoffAddressLabel(AppLocalizations strings) {
     return _addressLabel(dropoffLocation, strings, false);
+  }
+
+  String _dropoffDisplay(AppLocalizations strings) {
+    if (dropoffLocation != null) {
+      return _formatLocation(dropoffLocation!);
+    }
+    final region = toRegion ?? '';
+    final district = toDistrict ?? '';
+    if (region.isEmpty && district.isEmpty) {
+      return strings.tr('tapToPickOnMap');
+    }
+    return district.isEmpty ? region : '$region, $district';
   }
 
   String _addressLabel(
@@ -532,6 +517,13 @@ class _DeliveryPageState extends State<DeliveryPage> {
   String _formatPrice(double price) {
     final formatted = NumberFormat.decimalPattern().format(price);
     return '$formatted so\'m';
+  }
+
+  PickupLocation _fallbackDropoffLocation() {
+    final region = toRegion ?? '';
+    final district = toDistrict ?? '';
+    final address = district.isEmpty ? region : '$region, $district';
+    return PickupLocation(latitude: 0, longitude: 0, address: address);
   }
 
   Future<void> _showSummary(double? price) async {
@@ -584,11 +576,10 @@ class _DeliveryPageState extends State<DeliveryPage> {
                   label: strings.tr('pickupAddress'),
                   value: _formatLocation(pickupLocation!),
                 ),
-              if (dropoffLocation != null)
-                _SummaryRow(
-                  label: strings.tr('dropoffAddress'),
-                  value: _formatLocation(dropoffLocation!),
-                ),
+              _SummaryRow(
+                label: strings.tr('dropoffAddress'),
+                value: _dropoffDisplay(strings),
+              ),
               _SummaryRow(
                 label: strings.tr('packageType'),
                 value: strings.tr(packageType),
@@ -639,7 +630,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
       }
       return;
     }
-    if (pickupLocation == null || dropoffLocation == null) {
+    if (pickupLocation == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(strings.tr('tapToPickOnMap'))));
@@ -658,7 +649,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
         senderPhone: senderPhoneCtrl.text,
         receiverPhone: receiverPhoneCtrl.text,
         pickupLocation: pickupLocation!,
-        dropoffLocation: dropoffLocation!,
+        dropoffLocation: _fallbackDropoffLocation(),
         note: noteCtrl.text,
       );
 
@@ -722,17 +713,21 @@ class _SummaryRow extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '$label:',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(child: Text(value, style: theme.textTheme.bodyLarge)),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
+          ),
         ],
       ),
     );

@@ -24,6 +24,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   bool _refreshingProfile = false;
+  bool _openingDriver = false;
 
   @override
   Widget build(BuildContext context) {
@@ -46,9 +47,12 @@ class _ProfilePageState extends State<ProfilePage> {
         ? strings.tr('applicationPending')
         : strings.tr('becomeDriver');
     final VoidCallback? driverButtonAction =
-        (hasApprovedDriverAccess || (!pendingDriverReview && !user.isDriver))
-        ? () => _handleDriverNavigation(context)
-        : null;
+        _openingDriver
+            ? null
+            : (hasApprovedDriverAccess ||
+                    (!pendingDriverReview && !user.isDriver))
+                ? () => _handleDriverNavigation(context)
+                : null;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -252,6 +256,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   onPressed: driverButtonAction,
                   label: driverButtonLabel,
                   icon: Icons.drive_eta_rounded,
+                  loading: _openingDriver,
                 ),
                 if (user.isDriver && user.driverApproved) ...[
                   const SizedBox(height: AppSpacing.sm),
@@ -427,38 +432,48 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _handleDriverNavigation(BuildContext context) async {
+    if (_openingDriver) return;
+    setState(() => _openingDriver = true);
     final state = context.read<AppState>();
     final user = state.currentUser;
     final strings = context.strings;
     final messenger = ScaffoldMessenger.of(context);
 
-    if (!user.isDriver && !state.driverApplicationSubmitted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const DriverApplicationPage()),
-      );
-      return;
-    }
-
-    if (!user.driverApproved) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(strings.tr('applicationPending'))),
-      );
-      return;
-    }
-
     try {
-      await state.refreshDriverStatus(loadDashboard: true);
-    } on ApiException catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
-    } catch (_) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(strings.tr('unexpectedError'))),
-      );
-    }
+      if (!user.isDriver && !state.driverApplicationSubmitted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DriverApplicationPage()),
+        );
+        return;
+      }
 
-    state.switchToDriverMode();
-    widget.onOpenDriverDashboard();
+      if (!user.driverApproved) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(strings.tr('applicationPending'))),
+        );
+        return;
+      }
+
+      try {
+        await state.refreshDriverStatus(loadDashboard: true);
+      } on ApiException catch (error) {
+        messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      } catch (_) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(strings.tr('unexpectedError'))),
+        );
+      }
+
+      state.switchToDriverMode();
+      widget.onOpenDriverDashboard();
+    } finally {
+      if (mounted) {
+        setState(() => _openingDriver = false);
+      } else {
+        _openingDriver = false;
+      }
+    }
   }
 
   Future<void> _refreshProfileData(BuildContext context) async {

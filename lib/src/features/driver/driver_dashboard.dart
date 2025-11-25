@@ -13,6 +13,7 @@ import '../../state/app_state.dart';
 import 'driver_order_history_page.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
+import '../../core/design_tokens.dart';
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
@@ -51,14 +52,21 @@ class _DriverDashboardState extends State<DriverDashboard> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final strings = context.strings;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final onTint = colorScheme.onPrimary;
+    final onTintMuted = onTint.withValues(alpha: 0.78);
+    final balanceGradient = [
+      colorScheme.primary,
+      colorScheme.secondary,
+      colorScheme.tertiary,
+    ];
+    final statGradient = [colorScheme.secondary, colorScheme.primary];
+    final statAltGradient = [colorScheme.tertiary, colorScheme.secondary];
     _drainDriverRealtimeToasts(state);
     final user = state.currentUser;
     final stats = state.driverStats;
-    final pendingOrders = state.driverAvailableOrders.where((order) {
-      final viewers = state.driverOrderViewerCount(order.id);
-      final holdActive = state.isDriverOrderPreviewActive(order.id);
-      return viewers == 0 || holdActive;
-    }).toList();
     final activeOrders = state.driverActiveOrders
         .where((order) => order.status == OrderStatus.active)
         .toList();
@@ -104,36 +112,49 @@ class _DriverDashboardState extends State<DriverDashboard> {
               const LinearProgressIndicator(),
               const SizedBox(height: 16),
             ],
-            GlassCard(
+            _tintedCard(
+              gradient: balanceGradient,
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.12),
+                      color: onTint.withValues(alpha: isDark ? 0.12 : 0.1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.primary.withValues(alpha: 0.22),
+                          blurRadius: 16,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
                     child: Icon(
                       Icons.account_balance_wallet_rounded,
-                      size: 32,
-                      color: Theme.of(context).colorScheme.primary,
+                      size: 28,
+                      color: onTint,
                     ),
                   ),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(strings.tr('currentBalance')),
+                        Text(
+                          strings.tr('currentBalance'),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: onTintMuted,
+                          ),
+                        ),
                         Text(
                           NumberFormat.currency(
                             symbol: 'so\'m ',
                             decimalDigits: 0,
                           ).format(balance),
-                          style: Theme.of(context).textTheme.headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: onTint,
+                          ),
                         ),
                       ],
                     ),
@@ -141,59 +162,83 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
-                  child: GlassCard(
+                  child: _tintedCard(
+                    gradient: statGradient,
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(strings.tr('todayStats')),
-                        const SizedBox(height: 12),
+                        Text(
+                          strings.tr('todayStats'),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: onTintMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Text(
                           strings
                               .tr('ordersCount')
                               .replaceFirst('{count}', todayCount.toString()),
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: onTint,
+                          ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           NumberFormat.currency(
                             symbol: 'so\'m ',
                             decimalDigits: 0,
                           ).format(totalToday),
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: onTint,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: GlassCard(
+            const SizedBox(width: 12),
+            Expanded(
+              child: _tintedCard(
+                gradient: statAltGradient,
+                padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(strings.tr('monthStats')),
-                        const SizedBox(height: 12),
+                        Text(
+                          strings.tr('monthStats'),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: onTintMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Text(
                           strings
                               .tr('ordersCount')
                               .replaceFirst('{count}', monthCount.toString()),
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: onTint,
+                          ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           NumberFormat.currency(
                             symbol: 'so\'m ',
                             decimalDigits: 0,
                           ).format(totalMonth),
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: onTint,
+                          ),
                         ),
                       ],
                     ),
@@ -202,60 +247,33 @@ class _DriverDashboardState extends State<DriverDashboard> {
               ],
             ),
             const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                icon: const Icon(Icons.history_rounded),
-                label: Text(strings.tr('orderHistory')),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const DriverOrderHistoryPage(),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              strings.tr('incomingOrders'),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            if (pendingOrders.isEmpty)
-              GlassCard(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Text(strings.tr('noPendingOrders')),
-                  ),
-                ),
-              )
-            else
-              Column(
-                children: pendingOrders
-                    .map(
-                      (order) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _PendingOrderTile(
-                          key: ValueKey(order.id),
-                          order: order,
-                        ),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.history_rounded),
+                    label: Text(strings.tr('orderHistory')),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const DriverOrderHistoryPage(),
                       ),
-                    )
-                    .toList(),
-              ),
-            if (state.driverAvailableOrders.length >= 20 ||
-                state.driverAvailableHasMore)
-              Padding(
-                padding: const EdgeInsets.only(top: 8, bottom: 4),
-                child: Center(
-                  child: ElevatedButton(
-                    onPressed: _loadMoreDriverOrders,
-                    child: Text(strings.tr('more')),
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    icon: const Icon(Icons.move_to_inbox_rounded),
+                    label: Text(strings.tr('incomingOrders')),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const DriverIncomingOrdersPage(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 32),
             Text(
               strings.tr('activeOrders'),
@@ -295,8 +313,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     )
                     .toList(),
               ),
-            if (state.isLoadingMoreDriverAvailable ||
-                state.isLoadingMoreDriverActive)
+            if (state.isLoadingMoreDriverActive)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Center(child: CircularProgressIndicator()),
@@ -345,19 +362,74 @@ class _DriverDashboardState extends State<DriverDashboard> {
     }
   }
 
+  Widget _tintedCard({
+    required List<Color> gradient,
+    required Widget child,
+    EdgeInsets padding = const EdgeInsets.all(14),
+  }) {
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: AppRadii.cardRadius,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradient,
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -32,
+              top: -24,
+              child: _tintBlob(
+                color: gradient.last.withValues(alpha: 0.22),
+                size: 140,
+              ),
+            ),
+            Positioned(
+              left: -18,
+              bottom: -18,
+              child: _tintBlob(
+                color: gradient.first.withValues(alpha: 0.2),
+                size: 120,
+              ),
+            ),
+            Padding(padding: padding, child: child),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tintBlob({required Color color, required double size}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.3),
+            blurRadius: size * 0.24,
+            spreadRadius: size * 0.05,
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _loadMoreDriverOrders() async {
     if (_isPagingOrders) return;
     final state = context.read<AppState>();
-    final loading =
-        state.isLoadingMoreDriverAvailable || state.isLoadingMoreDriverActive;
-    final hasMore = state.driverAvailableHasMore || state.driverActiveHasMore;
+    final loading = state.isLoadingMoreDriverActive;
+    final hasMore = state.driverActiveHasMore;
     if (!hasMore || loading) return;
     _isPagingOrders = true;
     try {
-      await Future.wait([
-        state.loadMoreDriverAvailableOrders(),
-        state.loadMoreDriverActiveOrders(),
-      ]);
+      await state.loadMoreDriverActiveOrders();
     } finally {
       _isPagingOrders = false;
     }
@@ -384,6 +456,349 @@ class _DriverDashboardState extends State<DriverDashboard> {
   }
 }
 
+class DriverIncomingOrdersPage extends StatefulWidget {
+  const DriverIncomingOrdersPage({super.key});
+
+  @override
+  State<DriverIncomingOrdersPage> createState() =>
+      _DriverIncomingOrdersPageState();
+}
+
+class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
+  bool _bootstrapped = false;
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  Future<void> _bootstrap() async {
+    if (_bootstrapped) return;
+    _bootstrapped = true;
+    await _refreshOrders();
+  }
+
+  Future<void> _refreshOrders() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await context.read<AppState>().refreshDriverDashboard(force: true);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      final strings = context.strings;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.tr('unexpectedError'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
+    }
+  }
+
+  Future<void> _loadMoreOrders() async {
+    final state = context.read<AppState>();
+    if (state.isLoadingMoreDriverAvailable || !state.driverAvailableHasMore) {
+      return;
+    }
+    await state.loadMoreDriverAvailableOrders();
+  }
+
+  Future<void> _onOrderTypeFilterChanged(OrderType? value) async {
+    final state = context.read<AppState>();
+    await _applyFilters(
+      orderType: value,
+      fromRegionId: state.driverIncomingFromRegionFilter,
+      toRegionId: state.driverIncomingToRegionFilter,
+    );
+  }
+
+  Future<void> _onFromRegionChanged(int? regionId) async {
+    final state = context.read<AppState>();
+    var toRegionId = state.driverIncomingToRegionFilter;
+    if (regionId != null && toRegionId == regionId) {
+      toRegionId = null;
+    }
+    await _applyFilters(
+      orderType: state.driverIncomingTypeFilter,
+      fromRegionId: regionId,
+      toRegionId: toRegionId,
+    );
+  }
+
+  Future<void> _onToRegionChanged(int? regionId) async {
+    final state = context.read<AppState>();
+    var fromRegionId = state.driverIncomingFromRegionFilter;
+    if (regionId != null && fromRegionId == regionId) {
+      fromRegionId = null;
+    }
+    await _applyFilters(
+      orderType: state.driverIncomingTypeFilter,
+      fromRegionId: fromRegionId,
+      toRegionId: regionId,
+    );
+  }
+
+  Future<void> _applyFilters({
+    OrderType? orderType,
+    int? fromRegionId,
+    int? toRegionId,
+  }) async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await context
+          .read<AppState>()
+          .updateDriverIncomingFilters(
+            orderType: orderType,
+            fromRegionId: fromRegionId,
+            toRegionId: toRegionId,
+          );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      final strings = context.strings;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.tr('unexpectedError'))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final state = context.watch<AppState>();
+    final theme = Theme.of(context);
+    final pendingOrders = state.driverAvailableOrders.where((order) {
+      final viewers = state.driverOrderViewerCount(order.id);
+      final holdActive = state.isDriverOrderPreviewActive(order.id);
+      return viewers == 0 || holdActive;
+    }).toList();
+    final orderTypeFilter = state.driverIncomingTypeFilter;
+    final fromRegionFilter = state.driverIncomingFromRegionFilter;
+    final toRegionFilter = state.driverIncomingToRegionFilter;
+    final regionOptions = state.regionOptions;
+    final fromRegionOptions = regionOptions
+        .where((region) => region.id != toRegionFilter)
+        .toList(growable: false);
+    final toRegionOptions = regionOptions
+        .where((region) => region.id != fromRegionFilter)
+        .toList(growable: false);
+    final hasMore = state.driverAvailableHasMore;
+    final isLoadingMore = state.isLoadingMoreDriverAvailable;
+    final showLoadingBar = state.isDriverContextLoading || _refreshing;
+
+    final children = <Widget>[
+      if (showLoadingBar)
+        const Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.sm),
+          child: LinearProgressIndicator(),
+        ),
+      GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              strings.tr('filters'),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<int?>(
+                    value: fromRegionFilter,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: strings.tr('fromRegionFilter'),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: [
+                      DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text(strings.tr('allRegions')),
+                      ),
+                      ...fromRegionOptions.map(
+                        (region) => DropdownMenuItem<int?>(
+                          value: region.id,
+                          child: Text(state.regionLabel(region)),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => _onFromRegionChanged(value),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: DropdownButtonFormField<int?>(
+                    value: toRegionFilter,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: strings.tr('toRegionFilter'),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: [
+                      DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text(strings.tr('allRegions')),
+                      ),
+                      ...toRegionOptions.map(
+                        (region) => DropdownMenuItem<int?>(
+                          value: region.id,
+                          child: Text(state.regionLabel(region)),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => _onToRegionChanged(value),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<OrderType?>(
+              value: orderTypeFilter,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: strings.tr('orderTypeFilter'),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              items: [
+                DropdownMenuItem<OrderType?>(
+                  value: null,
+                  child: Text(strings.tr('any')),
+                ),
+                DropdownMenuItem<OrderType?>(
+                  value: OrderType.taxi,
+                  child: Text(strings.tr('taxiOrder')),
+                ),
+                DropdownMenuItem<OrderType?>(
+                  value: OrderType.delivery,
+                  child: Text(strings.tr('deliveryOrder')),
+                ),
+              ],
+              onChanged: (value) => _onOrderTypeFilterChanged(value),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+    ];
+
+    if (pendingOrders.isEmpty) {
+      children.add(
+        GlassCard(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: Center(
+              child: Text(strings.tr('noPendingOrders')),
+            ),
+          ),
+        ),
+      );
+    } else {
+      for (var i = 0; i < pendingOrders.length; i++) {
+        children.add(
+          _PendingOrderTile(
+            key: ValueKey(pendingOrders[i].id),
+            order: pendingOrders[i],
+          ),
+        );
+        if (i != pendingOrders.length - 1) {
+          children.add(const SizedBox(height: AppSpacing.sm));
+        }
+      }
+
+      if (hasMore || isLoadingMore) {
+        children.add(const SizedBox(height: AppSpacing.sm));
+        children.add(
+          Center(
+            child: isLoadingMore
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                    child: CircularProgressIndicator(),
+                  )
+                : ElevatedButton(
+                    onPressed: _loadMoreOrders,
+                    child: Text(strings.tr('more')),
+                  ),
+          ),
+        );
+      }
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(strings.tr('incomingOrders')),
+        actions: [
+          IconButton(
+            tooltip: strings.tr('refresh'),
+            onPressed: _refreshing ? null : _refreshOrders,
+            icon: SizedBox.square(
+              dimension: 24,
+              child: _refreshing
+                  ? const Padding(
+                      padding: EdgeInsets.all(2),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+            ),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshOrders,
+        child: ListView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.xl,
+          ),
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
 class _PendingOrderTile extends StatelessWidget {
   const _PendingOrderTile({super.key, required this.order});
 
@@ -395,6 +810,8 @@ class _PendingOrderTile extends StatelessWidget {
     final theme = Theme.of(context);
     final state = context.watch<AppState>();
     final viewerCount = state.driverOrderViewerCount(order.id);
+    final canAccept = state.canDriverAcceptOrder(order);
+    final disabled = !canAccept;
     final expiresAt = state.driverOrderPreviewExpiresAt(order.id);
     final holdActive = state.isDriverOrderPreviewActive(order.id);
     final String? holdLabel = holdActive && expiresAt != null
@@ -410,109 +827,104 @@ class _PendingOrderTile extends StatelessWidget {
           ).format(order.price)
         : strings.tr('priceUnspecified');
 
-    return GlassCard(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => _showDetails(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Chip(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      visualDensity: VisualDensity.compact,
-                      avatar: Icon(
-                        order.isTaxi
-                            ? Icons.local_taxi_rounded
-                            : Icons.inventory_2_rounded,
-                        size: 18,
-                      ),
-                      label: Text(
-                        order.isTaxi
-                            ? strings.tr('taxiOrder')
-                            : strings.tr('deliveryOrder'),
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '#${order.id}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w700,
+    return Opacity(
+      opacity: disabled ? 0.55 : 1,
+      child: GlassCard(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: disabled ? null : () => _showDetails(context, canAccept: canAccept),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Chip(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        avatar: Icon(
+                          order.isTaxi
+                              ? Icons.local_taxi_rounded
+                              : Icons.inventory_2_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          order.isTaxi
+                              ? strings.tr('taxiOrder')
+                              : strings.tr('deliveryOrder'),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '${_formatRegionDistrict(order.fromRegion, order.fromDistrict)} → ${_formatRegionDistrict(order.toRegion, order.toDistrict)}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '#${order.id}',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _InfoChip(
-                      icon: Icons.group_rounded,
-                      label: passengersLabel,
+                  const SizedBox(height: 10),
+                  Text(
+                    '${_formatRegionDistrict(order.fromRegion, order.fromDistrict)} → ${_formatRegionDistrict(order.toRegion, order.toDistrict)}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    _InfoChip(icon: Icons.payments_rounded, label: priceLabel),
-                    if (holdLabel != null)
-                      _InfoChip(
-                        icon: Icons.lock_clock_rounded,
-                        label: strings
-                            .tr('reservedUntil')
-                            .replaceFirst('{time}', holdLabel),
-                      ),
-                    if (viewerCount > 0)
-                      _InfoChip(
-                        icon: Icons.visibility_rounded,
-                        label: strings
-                            .tr('driversViewingCount')
-                            .replaceFirst('{count}', '$viewerCount'),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                    ),
-                    onPressed: () => _showDetails(context),
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    label: Text(strings.tr('viewOrderDetails')),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _InfoChip(
+                        icon: Icons.group_rounded,
+                        label: passengersLabel,
+                      ),
+                      _InfoChip(
+                        icon: Icons.payments_rounded,
+                        label: priceLabel,
+                      ),
+                      if (holdLabel != null)
+                        _InfoChip(
+                          icon: Icons.lock_clock_rounded,
+                          label: strings
+                              .tr('reservedUntil')
+                              .replaceFirst('{time}', holdLabel),
+                        ),
+                      if (viewerCount > 0)
+                        _InfoChip(
+                          icon: Icons.visibility_rounded,
+                          label: strings
+                              .tr('driversViewingCount')
+                              .replaceFirst('{count}', '$viewerCount'),
+                        ),
+                      if (!canAccept)
+                        _InfoChip(
+                          icon: Icons.lock_rounded,
+                          label: strings.tr('currentBalance'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -520,7 +932,31 @@ class _PendingOrderTile extends StatelessWidget {
     );
   }
 
-  void _showDetails(BuildContext context) {
+  Future<void> _showDetails(
+    BuildContext context, {
+    required bool canAccept,
+  }) async {
+    if (!canAccept) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Insufficient balance to view this order'),
+          ),
+        );
+      }
+      return;
+    }
+    var orderToShow = order;
+    try {
+      final detailed =
+          await context.read<AppState>().loadDriverOrderDetail(order);
+      if (detailed != null) {
+        orderToShow = detailed;
+      }
+    } catch (_) {
+      // Ignore detail fetch errors; fall back to current order data.
+    }
+    if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -529,7 +965,12 @@ class _PendingOrderTile extends StatelessWidget {
         final padding = MediaQuery.of(context).padding;
         return Padding(
           padding: EdgeInsets.fromLTRB(24, 24, 24, padding.bottom + 24),
-          child: _DriverOrderDetailSheet(order: order),
+          child: _DriverOrderDetailSheet(
+            order: orderToShow,
+            hasPrefetchedDetails: true,
+            previewMode: true,
+            canAccept: canAccept,
+          ),
         );
       },
     );
@@ -607,23 +1048,62 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Icon(
-                confirmed ? Icons.verified_rounded : Icons.info_outline_rounded,
-                color: confirmed ? const Color(0xFF10B981) : Colors.amber,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  confirmationInfo,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: confirmed ? const Color(0xFF10B981) : Colors.amber,
+                child: confirmed
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F7F1),
+                          borderRadius: BorderRadius.circular(AppRadii.button),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.verified_rounded,
+                              color: Color(0xFF10B981),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                confirmationInfo,
+                                style: Theme.of(context).textTheme.labelLarge
+                                    ?.copyWith(
+                                      color: const Color(0xFF059669),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                tooltip: strings.tr('viewOrderDetails'),
+                style: IconButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(10),
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.08),
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadii.button),
                   ),
                 ),
+                onPressed: () => _showDetails(context),
+                icon: const Icon(Icons.remove_red_eye_rounded),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           if (!confirmed) ...[
             GradientButton(
               onPressed: _confirming ? null : () => _confirmOrder(context),
@@ -695,12 +1175,38 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
       }
     }
   }
+
+  void _showDetails(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final padding = MediaQuery.of(context).padding;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, padding.bottom + 24),
+          child: _DriverOrderDetailSheet(
+            order: widget.order,
+            previewMode: false,
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _DriverOrderDetailSheet extends StatefulWidget {
-  const _DriverOrderDetailSheet({required this.order});
+  const _DriverOrderDetailSheet({
+    required this.order,
+    this.previewMode = true,
+    this.hasPrefetchedDetails = false,
+    this.canAccept = true,
+  });
 
   final AppOrder order;
+  final bool previewMode;
+  final bool hasPrefetchedDetails;
+  final bool canAccept;
 
   @override
   State<_DriverOrderDetailSheet> createState() =>
@@ -710,38 +1216,50 @@ class _DriverOrderDetailSheet extends StatefulWidget {
 class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
   late AppOrder _order;
   Timer? _timer;
+  Future<void>? _previewFuture;
   Duration? _remaining;
   bool _expired = false;
   bool _accepting = false;
   bool _releasing = false;
   bool _stopSent = false;
   bool _holdReleased = false;
+  late final bool _shouldFetchDetails;
 
   @override
   void initState() {
     super.initState();
     _order = widget.order;
-    final state = context.read<AppState>();
-    state.beginDriverOrderPreview(widget.order);
-    _remaining = _remainingFrom(
-      state.driverOrderPreviewExpiresAt(widget.order.id),
-    );
-    _expired = _remaining == Duration.zero;
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
-    _loadDetails();
+    _shouldFetchDetails =
+        !widget.hasPrefetchedDetails || _needsDetails(widget.order);
+    final previewEnabled = widget.previewMode && widget.canAccept;
+    if (previewEnabled) {
+      final state = context.read<AppState>();
+      _previewFuture = state.beginDriverOrderPreview(widget.order);
+      _remaining = _remainingFrom(
+        state.driverOrderPreviewExpiresAt(widget.order.id),
+      );
+      _expired = _remaining == Duration.zero;
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    }
+    if (_shouldFetchDetails) {
+      _loadDetails();
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    if (!_stopSent) {
-      context.read<AppState>().endDriverOrderPreview(_order);
-      _stopSent = true;
+    if (widget.previewMode) {
+      _timer?.cancel();
+      if (!_stopSent) {
+        context.read<AppState>().endDriverOrderPreview(_order);
+        _stopSent = true;
+      }
     }
     super.dispose();
   }
 
   void _tick() {
+    if (!widget.previewMode || !widget.canAccept) return;
     if (!mounted) return;
     final state = context.read<AppState>();
     final remaining = _remainingFrom(
@@ -767,7 +1285,22 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     return diff.isNegative ? Duration.zero : diff;
   }
 
+  bool _needsDetails(AppOrder order) {
+    final hasPickup = (order.pickupAddress?.trim().isNotEmpty ?? false) ||
+        (order.pickupLatitude != null && order.pickupLongitude != null);
+    final hasPhone = (order.customerPhone?.trim().isNotEmpty ?? false);
+    return !(hasPickup && hasPhone);
+  }
+
   Future<void> _loadDetails() async {
+    if (!_needsDetails(_order)) return;
+    if (widget.previewMode && _previewFuture != null) {
+      try {
+        await _previewFuture;
+      } catch (_) {
+        // Ignore preview failures; we will still try to fetch details.
+      }
+    }
     final fetched = await context.read<AppState>().loadDriverOrderDetail(
       _order,
     );
@@ -779,6 +1312,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
   }
 
   void _sendStopViewing({bool releaseHold = false, String? reason}) {
+    if (!widget.previewMode || !widget.canAccept) return;
     context.read<AppState>().endDriverOrderPreview(
       _order,
       releaseHold: releaseHold,
@@ -839,11 +1373,16 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     if (_expired || _holdReleased) return;
     final phone = _order.customerPhone?.trim();
     if (phone == null || phone.isEmpty) return;
-    final strings = context.strings;
-    final messenger = ScaffoldMessenger.of(context);
-    await Clipboard.setData(ClipboardData(text: phone));
+    await _copyText(context, phone);
+  }
+
+  Future<void> _copyText(BuildContext context, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(strings.tr('copied'))));
+    final strings = context.strings;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(strings.tr('copied'))));
   }
 
   String _formatRemaining() {
@@ -857,15 +1396,33 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     return '$minutes:$seconds';
   }
 
+  String? _pickupLabel(AppOrder order) {
+    final address = order.pickupAddress?.trim();
+    if (address != null && address.isNotEmpty) return address;
+    final lat = order.pickupLatitude;
+    final lng = order.pickupLongitude;
+    if (lat != null && lng != null) {
+      return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
     final theme = Theme.of(context);
     final state = context.watch<AppState>();
     final order = _order;
-    final viewerCount = state.driverOrderViewerCount(order.id);
-    final expiresAt = state.driverOrderPreviewExpiresAt(order.id);
-    final holdWindow = state.driverOrderPreviewWindow;
+    final previewActive = widget.previewMode && widget.canAccept;
+    final viewerCount = previewActive
+        ? state.driverOrderViewerCount(order.id)
+        : 0;
+    final expiresAt = previewActive
+        ? state.driverOrderPreviewExpiresAt(order.id)
+        : null;
+    final holdWindow = previewActive
+        ? state.driverOrderPreviewWindow
+        : Duration.zero;
     final totalSeconds = holdWindow.inSeconds;
     final rawSeconds = (_remaining ?? Duration.zero).inSeconds;
     final clampedSeconds = totalSeconds == 0
@@ -884,24 +1441,31 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
             order.startTime.minute == 0 &&
             order.endTime == order.startTime);
     final String? scheduleLabel = hasExplicitTime ? timeLabel : null;
+    final pickupLabel = _pickupLabel(order);
     final priceLabel = order.priceAvailable
         ? NumberFormat.currency(
             symbol: 'so\'m ',
             decimalDigits: 0,
           ).format(order.price)
         : strings.tr('priceUnspecified');
+    final serviceFeeLabel = NumberFormat.currency(
+      symbol: 'so\'m ',
+      decimalDigits: 0,
+    ).format(order.serviceFee);
     final passengersLabel = strings
         .tr('passengersCount')
         .replaceFirst('{count}', order.passengers.toString());
-    final reservedLabel = !_expired && expiresAt != null
+    final reservedLabel = previewActive && !_expired && expiresAt != null
         ? strings
               .tr('reservedUntil')
               .replaceFirst('{time}', DateFormat.Hm().format(expiresAt))
-        : strings.tr('orderHoldExpiredInfo');
+        : null;
     final note = order.note?.trim();
     final phone = order.customerPhone?.trim() ?? '';
     final hasPhone = phone.isNotEmpty;
-    final canCall = hasPhone && !_expired && !_holdReleased;
+    final canCall =
+        hasPhone && (!widget.previewMode || (!_expired && !_holdReleased));
+    final acceptDisabled = _expired || _holdReleased || !widget.canAccept;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -942,27 +1506,32 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                   Text(scheduleLabel, style: theme.textTheme.bodyMedium),
                 ],
                 const SizedBox(height: 12),
-                Text(
-                  strings.tr('orderHoldMessage'),
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  reservedLabel,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                if (viewerCount > 0) ...[
-                  const SizedBox(height: 4),
+                if (widget.previewMode) ...[
                   Text(
-                    strings
-                        .tr('driversViewingCount')
-                        .replaceFirst('{count}', '$viewerCount'),
-                    style: theme.textTheme.bodySmall,
+                    strings.tr('orderHoldMessage'),
+                    style: theme.textTheme.bodyMedium,
                   ),
-                ],
-                const SizedBox(height: 16),
+                  if (reservedLabel != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      reservedLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                  if (viewerCount > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      strings
+                          .tr('driversViewingCount')
+                          .replaceFirst('{count}', '$viewerCount'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                ] else
+                  const SizedBox(height: 8),
                 _buildInfoRow(
                   context,
                   icon: Icons.calendar_today_rounded,
@@ -988,6 +1557,35 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                   label: strings.tr('price'),
                   value: priceLabel,
                 ),
+                if (pickupLabel != null)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoRow(
+                        context,
+                        icon: Icons.place_rounded,
+                        label: strings.tr('pickupAddress'),
+                        value: pickupLabel,
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          onPressed: () => _copyText(context, pickupLabel),
+                          icon: const Icon(Icons.copy_rounded, size: 18),
+                          label: Text(strings.tr('copyAddress')),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                  ),
                 _buildInfoRow(
                   context,
                   icon: Icons.note_alt_rounded,
@@ -1054,39 +1652,41 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                LinearProgressIndicator(value: progress.clamp(0.0, 1.0)),
-                const SizedBox(height: 6),
-                Text(
-                  strings
-                      .tr('acceptTimer')
-                      .replaceFirst('{time}', _formatRemaining()),
-                ),
-                if (_expired) ...[
+                if (widget.previewMode) ...[
+                  LinearProgressIndicator(value: progress.clamp(0.0, 1.0)),
                   const SizedBox(height: 6),
                   Text(
-                    strings.tr('orderHoldExpiredInfo'),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
+                    strings
+                        .tr('acceptTimer')
+                        .replaceFirst('{time}', _formatRemaining()),
+                  ),
+                  if (_expired) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      strings.tr('orderHoldExpiredInfo'),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
                     ),
+                  ],
+                  const SizedBox(height: 20),
+                  GradientButton(
+                    onPressed: _expired || _holdReleased
+                        ? null
+                        : () => _acceptOrder(context),
+                    label: strings.tr('acceptOrder'),
+                    icon: Icons.check_circle_rounded,
+                    loading: _accepting,
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _releasing || _holdReleased
+                        ? null
+                        : () => _releaseOrder(context),
+                    icon: const Icon(Icons.cancel_schedule_send_rounded),
+                    label: Text(strings.tr('releaseOrder')),
                   ),
                 ],
-                const SizedBox(height: 20),
-                GradientButton(
-                  onPressed: _expired || _holdReleased
-                      ? null
-                      : () => _acceptOrder(context),
-                  label: strings.tr('acceptOrder'),
-                  icon: Icons.check_circle_rounded,
-                  loading: _accepting,
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _releasing || _holdReleased
-                      ? null
-                      : () => _releaseOrder(context),
-                  icon: const Icon(Icons.cancel_schedule_send_rounded),
-                  label: Text(strings.tr('releaseOrder')),
-                ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: Text(strings.tr('close')),
@@ -1104,6 +1704,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     required IconData icon,
     required String label,
     required String value,
+    Widget? trailing,
   }) {
     final theme = Theme.of(context);
     return Padding(
@@ -1131,6 +1732,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
               ],
             ),
           ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing],
         ],
       ),
     );
