@@ -204,11 +204,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     ),
                   ),
                 ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _tintedCard(
-                gradient: statAltGradient,
-                padding: const EdgeInsets.all(12),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _tintedCard(
+                    gradient: statAltGradient,
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -487,15 +487,15 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
       await context.read<AppState>().refreshDriverDashboard(force: true);
     } on ApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
       final strings = context.strings;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.tr('unexpectedError'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.tr('unexpectedError'))));
     } finally {
       if (mounted) {
         setState(() => _refreshing = false);
@@ -554,24 +554,22 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
     if (_refreshing) return;
     setState(() => _refreshing = true);
     try {
-      await context
-          .read<AppState>()
-          .updateDriverIncomingFilters(
-            orderType: orderType,
-            fromRegionId: fromRegionId,
-            toRegionId: toRegionId,
-          );
+      await context.read<AppState>().updateDriverIncomingFilters(
+        orderType: orderType,
+        fromRegionId: fromRegionId,
+        toRegionId: toRegionId,
+      );
     } on ApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
       final strings = context.strings;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.tr('unexpectedError'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.tr('unexpectedError'))));
     } finally {
       if (mounted) {
         setState(() => _refreshing = false);
@@ -724,9 +722,7 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
         GlassCard(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-            child: Center(
-              child: Text(strings.tr('noPendingOrders')),
-            ),
+            child: Center(child: Text(strings.tr('noPendingOrders'))),
           ),
         ),
       );
@@ -834,7 +830,9 @@ class _PendingOrderTile extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
-            onTap: disabled ? null : () => _showDetails(context, canAccept: canAccept),
+            onTap: disabled
+                ? null
+                : () => _showDetails(context, canAccept: canAccept),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Column(
@@ -948,8 +946,9 @@ class _PendingOrderTile extends StatelessWidget {
     }
     var orderToShow = order;
     try {
-      final detailed =
-          await context.read<AppState>().loadDriverOrderDetail(order);
+      final detailed = await context.read<AppState>().loadDriverOrderDetail(
+        order,
+      );
       if (detailed != null) {
         orderToShow = detailed;
       }
@@ -1286,7 +1285,8 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
   }
 
   bool _needsDetails(AppOrder order) {
-    final hasPickup = (order.pickupAddress?.trim().isNotEmpty ?? false) ||
+    final hasPickup =
+        (order.pickupAddress?.trim().isNotEmpty ?? false) ||
         (order.pickupLatitude != null && order.pickupLongitude != null);
     final hasPhone = (order.customerPhone?.trim().isNotEmpty ?? false);
     return !(hasPickup && hasPhone);
@@ -1302,9 +1302,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
         // Ignore preview failures; we will still try to fetch details.
       }
     }
-    final fetched = await appState.loadDriverOrderDetail(
-      _order,
-    );
+    final fetched = await appState.loadDriverOrderDetail(_order);
     if (fetched != null && mounted) {
       setState(() {
         _order = fetched;
@@ -1404,6 +1402,41 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(strings.tr('copied'))));
+  }
+
+  Future<void> _openYandexMap(BuildContext context) async {
+    final lat = _order.pickupLatitude;
+    final lng = _order.pickupLongitude;
+    final strings = context.strings;
+    final fallbackLabel = _pickupLabel(_order);
+    Uri? uri;
+    if (lat != null && lng != null) {
+      uri = Uri.parse(
+        'https://yandex.com/maps/?ll=$lng,$lat&z=17&pt=$lng,$lat&l=map',
+      );
+    } else if (fallbackLabel != null && fallbackLabel.isNotEmpty) {
+      uri = Uri.parse(
+        'https://yandex.com/maps/?text=${Uri.encodeComponent(fallbackLabel)}',
+      );
+    }
+    if (uri == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.tr('mapOpenFailed'))));
+      return;
+    }
+    bool launched = false;
+    try {
+      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      launched = false;
+    }
+    if (!context.mounted) return;
+    if (!launched) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.tr('mapOpenFailed'))));
+    }
   }
 
   String _formatRemaining() {
@@ -1586,17 +1619,21 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                       const SizedBox(height: 8),
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppRadii.button,
+                              ),
                             ),
                           ),
-                          onPressed: () => _copyText(context, pickupLabel),
-                          icon: const Icon(Icons.copy_rounded, size: 18),
-                          label: Text(strings.tr('copyAddress')),
+                          onPressed: () => _openYandexMap(context),
+                          icon: const Icon(Icons.map_rounded),
+                          label: Text(strings.tr('openInMap')),
                         ),
                       ),
                       const SizedBox(height: 4),
