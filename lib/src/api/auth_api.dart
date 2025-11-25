@@ -298,6 +298,31 @@ class ApiClient {
     );
   }
 
+  Future<void> rateDriver({
+    required int driverId,
+    required int orderId,
+    required OrderType orderType,
+    required int rating,
+    String? comment,
+  }) async {
+    final body = <String, dynamic>{
+      'driver_id': driverId,
+      'order_id': orderId,
+      'order_type': orderType.name,
+      'rating': rating,
+    };
+    final sanitizedComment = comment?.trim();
+    if (sanitizedComment != null && sanitizedComment.isNotEmpty) {
+      body['comment'] = sanitizedComment;
+    }
+    await _request(
+      'POST',
+      '/ratings/',
+      authorized: true,
+      body: body,
+    );
+  }
+
   Future<List<Map<String, dynamic>>> fetchNotifications({
     bool unreadOnly = false,
   }) async {

@@ -85,6 +85,7 @@ class AppState extends ChangeNotifier {
       Queue<({String title, String message})>();
   final Map<String, DateTime> _driverOrderPreviewAnchors = <String, DateTime>{};
   final Map<String, int> _driverOrderViewerCounts = <String, int>{};
+  final Set<String> _ratedOrders = <String>{};
   final Map<String, ({OrderStatus status, _DriverInfo? driver})>
   _lastPassengerOrderEvents =
       <String, ({OrderStatus status, _DriverInfo? driver})>{};
@@ -112,6 +113,7 @@ class AppState extends ChangeNotifier {
   bool get driverApplicationSubmitted => _driverApplicationSubmitted;
   bool get isBootstrapping => _bootstrapping;
   String? get authToken => _authToken;
+  bool hasRatedOrder(String orderId) => _ratedOrders.contains(orderId);
 
   List<AppOrder> get activeOrders => _ordersForCurrentUser()
       .where(
@@ -632,6 +634,47 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> rateDriver({
+    required AppOrder order,
+    required int rating,
+    String? comment,
+  }) async {
+    if (!_isAuthenticated) {
+      throw const ApiException('Login required', statusCode: 401);
+    }
+    if (_ratedOrders.contains(order.id)) {
+      throw const ApiException('You have already rated this order');
+    }
+    final normalizedRating = rating.clamp(1, 5).toInt();
+    final driverId = order.driverId;
+    if (driverId == null || driverId <= 0) {
+      throw const ApiException('Driver not assigned', statusCode: 400);
+    }
+    final orderId = int.tryParse(order.id);
+    if (orderId == null) {
+      throw const ApiException('Invalid order id', statusCode: 400);
+    }
+    try {
+      await _api.rateDriver(
+        driverId: driverId,
+        orderId: orderId,
+        orderType: order.type,
+        rating: normalizedRating,
+        comment: comment,
+      );
+      _markOrderRated(order.id);
+    } on ApiException catch (error) {
+      final message = error.message.toLowerCase();
+      final alreadyRated =
+          message.contains('already rated') || message.contains('rated this');
+      if (alreadyRated) {
+        _markOrderRated(order.id);
+        return;
+      }
+      rethrow;
+    }
+  }
+
   Future<void> markNotificationsRead() async {
     final unread = _notifications.where((item) => !item.isRead).toList();
     if (unread.isEmpty) return;
@@ -784,6 +827,7 @@ class AppState extends ChangeNotifier {
     _driverOrderPreviewAnchors.clear();
     _driverOrderViewerCounts.clear();
     _lastPassengerOrderEvents.clear();
+    _ratedOrders.clear();
     _refreshRealtimeConnections();
     notifyListeners();
   }
@@ -1860,7 +1904,6 @@ class AppState extends ChangeNotifier {
   ) async {
     final orderId = _stringify(payload['order_id']);
     if (orderId.isEmpty) return;
-    final orderType = _orderTypeFromPayload(payload['order_type']);
     final driverId = _tryParseInt(payload['driver_id']);
 
     // If another driver reserved it, remove from available list
@@ -2178,6 +2221,8 @@ class AppState extends ChangeNotifier {
       return false;
     }
 
+    final driverIdFromPayload = _tryParseInt(payload['driver_id']);
+
     var updated = false;
     _orders = _orders.map((order) {
       if (order.id != orderId) return order;
@@ -2188,6 +2233,7 @@ class AppState extends ChangeNotifier {
         driverPhone: driverInfo?.phone,
         vehicle: driverInfo?.vehicle,
         vehiclePlate: driverInfo?.plate,
+        driverId: driverInfo?.id ?? driverIdFromPayload,
       );
     }).toList();
 
@@ -2228,6 +2274,7 @@ class AppState extends ChangeNotifier {
         driverPhone: updated.driverPhone ?? order.driverPhone,
         vehicle: updated.vehicle ?? order.vehicle,
         vehiclePlate: updated.vehiclePlate ?? order.vehiclePlate,
+        driverId: updated.driverId ?? order.driverId,
         note: updated.note ?? order.note,
         price: updated.price,
         scheduledAt: updated.scheduledAt ?? order.scheduledAt,
@@ -2362,7 +2409,9 @@ class AppState extends ChangeNotifier {
 
   _DriverInfo? _extractDriverInfo(Object? payload) {
     if (payload is Map<String, dynamic>) {
+      final id = _tryParseInt(payload['id'] ?? payload['driver_id']);
       return (
+        id: id,
         name: payload['full_name']?.toString() ?? payload['name']?.toString(),
         phone:
             payload['telephone']?.toString() ??
@@ -2376,7 +2425,9 @@ class AppState extends ChangeNotifier {
     }
     if (payload is Map) {
       final data = Map<String, dynamic>.from(payload);
+      final id = _tryParseInt(data['id'] ?? data['driver_id']);
       return (
+        id: id,
         name: data['full_name']?.toString() ?? data['name']?.toString(),
         phone:
             data['telephone']?.toString() ?? data['phone_number']?.toString(),
@@ -2391,6 +2442,7 @@ class AppState extends ChangeNotifier {
   bool _sameDriverInfo(_DriverInfo? a, _DriverInfo? b) {
     if (identical(a, b)) return true;
     if (a == null || b == null) return false;
+    if ((a.id ?? 0) != (b.id ?? 0)) return false;
     return (a.name ?? '').trim() == (b.name ?? '').trim() &&
         (a.phone ?? '').trim() == (b.phone ?? '').trim() &&
         (a.vehicle ?? '').trim() == (b.vehicle ?? '').trim() &&
@@ -2452,6 +2504,10 @@ class AppState extends ChangeNotifier {
         ..addAll(anchors);
       _pruneDriverPreviewAnchors();
     }
+    final ratedOrders = await storage.readRatedOrders();
+    _ratedOrders
+      ..clear()
+      ..addAll(ratedOrders);
     notifyListeners();
     await _bootstrapAfterAuth();
     return true;
@@ -2470,6 +2526,24 @@ class AppState extends ChangeNotifier {
       await storage.updateUser(_currentUser);
     }
     await storage.saveDriverPreviewAnchors(_driverOrderPreviewAnchors);
+    await storage.saveRatedOrders(_ratedOrders);
+  }
+
+  Future<void> _persistRatedOrders() async {
+    await _ensureStorage();
+    final storage = _sessionStorage;
+    if (storage == null) return;
+    await storage.saveRatedOrders(_ratedOrders);
+  }
+
+  void _markOrderRated(String orderId) {
+    final normalized = orderId.trim();
+    if (normalized.isEmpty) return;
+    final added = _ratedOrders.add(normalized);
+    if (added) {
+      unawaited(_persistRatedOrders());
+      notifyListeners();
+    }
   }
 
   AppUser _hydrateUser(AppUser user) {
@@ -3326,6 +3400,7 @@ class _PaginatedDriverOrders {
 }
 
 typedef _DriverInfo = ({
+  int? id,
   String? name,
   String? phone,
   String? vehicle,

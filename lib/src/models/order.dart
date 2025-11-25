@@ -43,6 +43,7 @@ class AppOrder {
     this.pickupLatitude,
     this.pickupLongitude,
     this.pickupAddress,
+    this.driverId,
   });
 
   factory AppOrder.fromJson(
@@ -113,10 +114,14 @@ class AppOrder {
     String? driverPhone;
     String? vehicle;
     String? vehiclePlate;
+    final rawDriverId = _toInt(json['driver_id']);
+    int? driverId = rawDriverId == 0 ? null : rawDriverId;
 
     final driver = json['driver'];
     if (driver is Map) {
       final map = Map<String, dynamic>.from(driver);
+      final mappedId = _toInt(map['id']);
+      if (mappedId > 0) driverId = mappedId;
       driverName = map['full_name']?.toString() ?? map['name']?.toString();
       driverPhone = map['phone_number']?.toString();
       vehicle = map['car_model']?.toString() ?? map['vehicle']?.toString();
@@ -198,6 +203,7 @@ class AppOrder {
       pickupLatitude: pickupLatitude,
       pickupLongitude: pickupLongitude,
       pickupAddress: pickupAddress,
+      driverId: driverId,
     );
   }
 
@@ -226,6 +232,7 @@ class AppOrder {
   final String? driverPhone;
   final String? vehicle;
   final String? vehiclePlate;
+  final int? driverId;
   final String? cancelReason;
   final DateTime? scheduledAt;
   final TimeOfDay? driverStartTime;
@@ -247,6 +254,7 @@ class AppOrder {
     String? driverPhone,
     String? vehicle,
     String? vehiclePlate,
+    int? driverId,
     String? note,
     double? price,
     double? serviceFee,
@@ -291,6 +299,7 @@ class AppOrder {
       driverPhone: driverPhone ?? this.driverPhone,
       vehicle: vehicle ?? this.vehicle,
       vehiclePlate: vehiclePlate ?? this.vehiclePlate,
+      driverId: driverId ?? this.driverId,
       cancelReason: cancelReason ?? this.cancelReason,
       scheduledAt: scheduledAt ?? this.scheduledAt,
       driverStartTime: driverStartTime ?? this.driverStartTime,
@@ -347,6 +356,7 @@ class AppOrder {
       pickupLatitude: pickupLatitude,
       pickupLongitude: pickupLongitude,
       pickupAddress: pickupAddress,
+      driverId: driverId,
     );
   }
 }

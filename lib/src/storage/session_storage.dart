@@ -25,6 +25,7 @@ class SessionStorage {
   static const _userKey = 'session_user';
   static const _savedAtKey = 'session_saved_at';
   static const _driverPreviewAnchorsKey = 'driver_preview_anchors';
+  static const _ratedOrdersKey = 'rated_orders';
 
   static Future<SessionStorage> getInstance() async {
     final prefs = await SharedPreferences.getInstance();
@@ -78,6 +79,7 @@ class SessionStorage {
       _prefs.remove(_userKey),
       _prefs.remove(_savedAtKey),
       _prefs.remove(_driverPreviewAnchorsKey),
+      _prefs.remove(_ratedOrdersKey),
     ]);
   }
 
@@ -109,5 +111,19 @@ class SessionStorage {
     } catch (_) {
       return <String, DateTime>{};
     }
+  }
+
+  Future<Set<String>> readRatedOrders() async {
+    final raw = _prefs.getStringList(_ratedOrdersKey);
+    if (raw == null) return <String>{};
+    return raw.where((id) => id.isNotEmpty).toSet();
+  }
+
+  Future<void> saveRatedOrders(Set<String> orderIds) async {
+    if (orderIds.isEmpty) {
+      await _prefs.remove(_ratedOrdersKey);
+      return;
+    }
+    await _prefs.setStringList(_ratedOrdersKey, orderIds.toList());
   }
 }

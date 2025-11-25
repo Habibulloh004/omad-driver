@@ -55,14 +55,14 @@ class _OrdersPageState extends State<OrdersPage>
     final historyOrders = state.historyOrders;
     const activeMoreThreshold = 20;
     const historyMoreThreshold = 20;
-    bool _hasMoreFor({required List<AppOrder> orders, required bool isActive}) {
+    bool hasMoreFor({required List<AppOrder> orders, required bool isActive}) {
       final threshold = isActive ? activeMoreThreshold : historyMoreThreshold;
       // Only show "More" when we've reached the tab threshold and backend reports more pages.
       return orders.length >= threshold && state.hasMoreOrders;
     }
 
-    final activeHasMore = _hasMoreFor(orders: activeOrders, isActive: true);
-    final historyHasMore = _hasMoreFor(orders: historyOrders, isActive: false);
+    final activeHasMore = hasMoreFor(orders: activeOrders, isActive: true);
+    final historyHasMore = hasMoreFor(orders: historyOrders, isActive: false);
     final mediaPadding = MediaQuery.of(context).padding;
     final bottomSpacing =
         mediaPadding.bottom + AppSpacing.xxl * 2 + AppSpacing.lg;
@@ -217,6 +217,12 @@ class _OrdersPageState extends State<OrdersPage>
                                 }
 
                                 final order = orders[adjustedIndex];
+                                final canRate = order.status ==
+                                        OrderStatus.completed &&
+                                    order.driverId != null &&
+                                    order.driverName != null;
+                                final showRate = canRate &&
+                                    !state.hasRatedOrder(order.id);
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: AppSpacing.xs,
@@ -224,6 +230,8 @@ class _OrdersPageState extends State<OrdersPage>
                                   child: _OrderCard(
                                     order: order,
                                     onTap: () => _openDetails(context, order),
+                                    onRate:
+                                        showRate ? () => _showRatingSheet(order) : null,
                                   ),
                                 );
                               },
@@ -245,12 +253,56 @@ class _OrdersPageState extends State<OrdersPage>
     );
   }
 
+  Future<void> _showRatingSheet(AppOrder order) async {
+    final strings = context.strings;
+    final appState = context.read<AppState>();
+    final messenger = ScaffoldMessenger.of(context);
+    final driverId = order.driverId;
+    if (driverId == null || driverId == 0) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('driverMissing'))),
+      );
+      return;
+    }
+    if (appState.hasRatedOrder(order.id)) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.tr('ratingAlreadySubmitted'))),
+      );
+      return;
+    }
+
+    final rated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return _RatingSheet(
+          order: order,
+          appState: appState,
+          onRated: () {
+            messenger.showSnackBar(
+              SnackBar(content: Text(strings.tr('ratingThanks'))),
+            );
+          },
+        );
+      },
+    );
+    if (rated == true && mounted) {
+      setState(() {});
+    }
+  }
+
   Future<void> _openDetails(BuildContext sheetContext, AppOrder order) async {
     final strings = sheetContext.strings;
     final scaffoldContext = context;
     final dateLabel = DateFormat('dd MMMM, yyyy').format(order.date);
     final startTimeLabel = order.startTime.format(context);
     final dateTimeLabel = '$dateLabel • $startTimeLabel';
+    final canRateDriver =
+        order.status == OrderStatus.completed && order.driverId != null;
+    final ratingAlreadySent =
+        scaffoldContext.read<AppState>().hasRatedOrder(order.id);
+    final showRatingCta = canRateDriver && !ratingAlreadySent;
 
     await showModalBottomSheet(
       context: sheetContext,
@@ -409,6 +461,72 @@ class _OrdersPageState extends State<OrdersPage>
                       style: theme.textTheme.labelLarge,
                     ),
                   ),
+                if (canRateDriver) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      borderRadius: AppRadii.cardRadius,
+                      color: theme.colorScheme.secondary
+                          .withValues(alpha: 0.08),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.star_rounded,
+                          color: theme.colorScheme.secondary,
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                strings.tr('rateDriver'),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                showRatingCta
+                                    ? strings.tr('rateDriverSubtitle')
+                                    : strings.tr('ratingAlreadySubmitted'),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color:
+                                      theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        if (showRatingCta)
+                          FilledButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _showRatingSheet(order);
+                            },
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.sm,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: AppRadii.pillRadius,
+                              ),
+                            ),
+                            child: Text(strings.tr('rateDriver')),
+                          )
+                        else
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: const Color(0xFF10B981),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -562,16 +680,237 @@ class _OrdersParallaxPage extends StatelessWidget {
   }
 }
 
-class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order, required this.onTap});
+class _RatingSheet extends StatefulWidget {
+  const _RatingSheet({
+    required this.order,
+    required this.appState,
+    required this.onRated,
+  });
 
   final AppOrder order;
-  final VoidCallback onTap;
+  final AppState appState;
+  final VoidCallback onRated;
+
+  @override
+  State<_RatingSheet> createState() => _RatingSheetState();
+}
+
+class _RatingSheetState extends State<_RatingSheet> {
+  late final TextEditingController _commentCtrl;
+  int _selectedRating = 1;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _commentCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
     final theme = Theme.of(context);
+    final media = MediaQuery.of(context);
+    final driverName =
+        widget.order.driverName?.trim().isNotEmpty == true
+            ? widget.order.driverName!
+            : strings.tr('driver');
+    final driverMeta = [
+      widget.order.vehicle,
+      widget.order.vehiclePlate,
+    ].whereType<String>().where((item) => item.isNotEmpty).join(' • ');
+    final avatarText = driverName.trim().isEmpty ? '?' : driverName.trim()[0];
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        media.viewInsets.bottom + AppSpacing.lg,
+      ),
+      child: GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor:
+                        theme.colorScheme.primary.withValues(alpha: 0.12),
+                    child: Text(
+                      avatarText.toUpperCase(),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          driverName,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (driverMeta.isNotEmpty)
+                          Text(
+                            driverMeta,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _submitting
+                        ? null
+                        : () => Navigator.of(context).pop(false),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                strings.tr('rateDriver'),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                strings.tr('rateDriverSubtitle'),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: List.generate(5, (index) {
+                  final value = index + 1;
+                  final isActive = value <= _selectedRating;
+                  return IconButton(
+                    iconSize: 32,
+                    onPressed: _submitting
+                        ? null
+                        : () {
+                            setState(() {
+                              _selectedRating = value;
+                            });
+                          },
+                    icon: Icon(
+                      isActive
+                          ? Icons.star_rounded
+                          : Icons.star_border_rounded,
+                      color: isActive
+                          ? theme.colorScheme.secondary
+                          : theme.colorScheme.outline,
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _commentCtrl,
+                minLines: 2,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: strings.tr('optionalComment'),
+                  alignLabelWithHint: true,
+                  hintText: strings.tr('ratingHint'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed:
+                        _submitting ? null : () => Navigator.of(context).pop(false),
+                    child: Text(strings.tr('maybeLater')),
+                  ),
+                  const Spacer(),
+                  FilledButton.icon(
+                    onPressed: _submitting ? null : _submit,
+                    icon: _submitting
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.send_rounded),
+                    label: Text(strings.tr('submitRating')),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.sm,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppRadii.rounded,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await widget.appState.rateDriver(
+        order: widget.order,
+        rating: _selectedRating,
+        comment: _commentCtrl.text,
+      );
+      if (!mounted) return;
+      widget.onRated();
+      Navigator.of(context).pop(true);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      setState(() => _submitting = false);
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.strings.tr('unexpectedError'))),
+      );
+      setState(() => _submitting = false);
+    }
+  }
+}
+
+class _OrderCard extends StatelessWidget {
+  const _OrderCard({required this.order, required this.onTap, this.onRate});
+
+  final AppOrder order;
+  final VoidCallback onTap;
+  final VoidCallback? onRate;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.strings;
+    final theme = Theme.of(context);
+    final showRate = onRate != null;
     final statusColor = switch (order.status) {
       OrderStatus.pending => theme.colorScheme.primary,
       OrderStatus.active => const Color(0xFF0EA5E9),
@@ -680,6 +1019,23 @@ class _OrderCard extends StatelessWidget {
                       ),
                   ],
                 ),
+                if (showRate) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  OutlinedButton.icon(
+                    onPressed: onRate,
+                    icon: const Icon(Icons.star_rounded, size: 18),
+                    label: Text(strings.tr('rateDriver')),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppRadii.pillRadius,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
