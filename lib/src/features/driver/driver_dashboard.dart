@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io';
-
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/auth_api.dart';
 import '../../localization/localization_ext.dart';
@@ -1293,6 +1293,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
   }
 
   Future<void> _loadDetails() async {
+    final appState = context.read<AppState>();
     if (!_needsDetails(_order)) return;
     if (widget.previewMode && _previewFuture != null) {
       try {
@@ -1301,7 +1302,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
         // Ignore preview failures; we will still try to fetch details.
       }
     }
-    final fetched = await context.read<AppState>().loadDriverOrderDetail(
+    final fetched = await appState.loadDriverOrderDetail(
       _order,
     );
     if (fetched != null && mounted) {
@@ -1373,12 +1374,32 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     if (_expired || _holdReleased) return;
     final phone = _order.customerPhone?.trim();
     if (phone == null || phone.isEmpty) return;
+    final sanitizedPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (sanitizedPhone.isEmpty) return;
+
+    final scheme = Platform.isIOS ? 'telprompt' : 'tel';
+    final uri = Uri.parse('$scheme:$sanitizedPhone');
+    bool launched = false;
+
+    try {
+      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      launched = false;
+    }
+
+    if (!context.mounted) return;
+    if (launched) return;
     await _copyText(context, phone);
+    final strings = context.strings;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text(strings.tr('cannotMakeCall'))),
+    );
   }
 
   Future<void> _copyText(BuildContext context, String value) async {
     await Clipboard.setData(ClipboardData(text: value));
-    if (!mounted) return;
+    if (!context.mounted) return;
     final strings = context.strings;
     ScaffoldMessenger.of(
       context,
@@ -1448,10 +1469,6 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
             decimalDigits: 0,
           ).format(order.price)
         : strings.tr('priceUnspecified');
-    final serviceFeeLabel = NumberFormat.currency(
-      symbol: 'so\'m ',
-      decimalDigits: 0,
-    ).format(order.serviceFee);
     final passengersLabel = strings
         .tr('passengersCount')
         .replaceFirst('{count}', order.passengers.toString());
@@ -1465,7 +1482,6 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     final hasPhone = phone.isNotEmpty;
     final canCall =
         hasPhone && (!widget.previewMode || (!_expired && !_holdReleased));
-    final acceptDisabled = _expired || _holdReleased || !widget.canAccept;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -1645,8 +1661,8 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                         onPressed: canCall
                             ? () => _callPassenger(context)
                             : null,
-                        icon: const Icon(Icons.copy_rounded),
-                        label: Text(strings.tr('copyNumber')),
+                        icon: const Icon(Icons.call_rounded),
+                        label: Text(strings.tr('callPassenger')),
                       ),
                     ],
                   ),

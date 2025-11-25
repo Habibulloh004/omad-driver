@@ -231,6 +231,7 @@ class AppLocalizations {
       'callPassengerHint':
           'Qabul qilishdan oldin 15 daqiqa ichida yo‘lovchi bilan bog‘laning.',
       'callPassengerUnavailable': 'Telefon raqami mavjud emas.',
+      'cannotMakeCall': 'Qo‘ng‘iroq qilib bo‘lmadi. Raqam nusxalandi.',
       'copyNumber': 'Raqamni nusxalash',
       'copyAddress': 'Manzilni nusxalash',
       'copied': 'Nusxalandi',
@@ -444,6 +445,7 @@ class AppLocalizations {
       'callPassengerHint':
           'Қабул қилишдан олдин 15 дақиқа ичида мижоз билан боғланинг.',
       'callPassengerUnavailable': 'Телефон рақами мавжуд эмас.',
+      'cannotMakeCall': 'Қўнғироқ қилишнинг иложи бўлмади. Рақам нусхаланди.',
       'copyNumber': 'Рақамни нусхалаш',
       'copyAddress': 'Манзилни нусхалаш',
       'copied': 'Нусхаланди',
@@ -653,6 +655,7 @@ class AppLocalizations {
       'callPassengerHint':
           'Вы можете связаться с пассажиром в течение 15 минут перед принятием заказа.',
       'callPassengerUnavailable': 'Номер недоступен.',
+      'cannotMakeCall': 'Не удалось позвонить. Номер скопирован в буфер.',
       'copyNumber': 'Скопировать номер',
       'copyAddress': 'Скопировать адрес',
       'copied': 'Скопировано',
