@@ -41,9 +41,9 @@ class AppRadii {
 class AppDurations {
   const AppDurations._();
 
-  static const Duration short = Duration(milliseconds: 200);
-  static const Duration medium = Duration(milliseconds: 320);
-  static const Duration long = Duration(milliseconds: 420);
+  static const Duration short = Duration(milliseconds: 150);
+  static const Duration medium = Duration(milliseconds: 200);
+  static const Duration long = Duration(milliseconds: 250);
 }
 
 class AppShadows {

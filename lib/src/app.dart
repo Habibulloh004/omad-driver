@@ -28,8 +28,8 @@ class MobileTaxiApp extends StatelessWidget {
             themeMode: state.themeMode,
             theme: buildLightTheme(lightTextTheme),
             darkTheme: buildDarkTheme(darkTextTheme),
-            themeAnimationDuration: AppDurations.long,
-            themeAnimationCurve: Curves.easeInOutCubic,
+            themeAnimationDuration: Duration.zero,
+            themeAnimationCurve: Curves.linear,
             locale: state.locale,
             supportedLocales: AppLocalizations.supportedLocales,
             localizationsDelegates: const [

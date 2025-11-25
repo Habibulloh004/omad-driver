@@ -617,10 +617,10 @@ ThemeData _buildTheme({
       selectionColor: colorScheme.primary.withValues(alpha: 0.25),
       selectionHandleColor: colorScheme.primary,
     ),
-    pageTransitionsTheme: const PageTransitionsTheme(
+    pageTransitionsTheme: PageTransitionsTheme(
       builders: {
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: const FadeUpwardsPageTransitionsBuilder(),
+        TargetPlatform.android: const FadeUpwardsPageTransitionsBuilder(),
       },
     ),
   );

@@ -32,7 +32,7 @@ class AppState extends ChangeNotifier {
   }
 
   static const Duration _sessionTTL = Duration(days: 7);
-  static const Duration _driverOrderPreviewWindow = Duration(minutes: 15);
+  static const Duration _driverOrderPreviewWindow = Duration(minutes: 2);
   static const Duration _serverTimeOffset = Duration(hours: 5);
   static const int _ordersPageSize = 20;
   static const int _driverOrdersPageSize = 10;
