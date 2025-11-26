@@ -750,6 +750,29 @@ class AppState extends ChangeNotifier {
     return pricing.priceForPassengers(1);
   }
 
+  Future<double?> fetchCalculatedPrice({
+    required int fromRegionId,
+    required int toRegionId,
+    required String serviceType,
+    int? passengers,
+  }) async {
+    try {
+      final response = await _api.calculatePrice(
+        fromRegionId: fromRegionId,
+        toRegionId: toRegionId,
+        serviceType: serviceType,
+        passengers: passengers,
+      );
+      final totalPrice = response['total_price'];
+      if (totalPrice == null) return null;
+      if (totalPrice is num) return totalPrice.toDouble();
+      final parsed = double.tryParse(totalPrice.toString());
+      return parsed;
+    } on ApiException {
+      return null;
+    }
+  }
+
   Future<void> updateProfile({String? name}) async {
     final trimmedName = name?.trim();
     final shouldUpdateName =
@@ -2651,6 +2674,8 @@ class AppState extends ChangeNotifier {
     }
     return _districtDisplayName(district);
   }
+
+  int? getRegionId(String name) => _regionIdByName(name);
 
   int? _regionIdByName(String name) {
     for (final region in _regions) {

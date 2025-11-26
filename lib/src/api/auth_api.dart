@@ -166,6 +166,31 @@ class ApiClient {
     return _ensureListOfMaps(response);
   }
 
+  Future<Map<String, dynamic>> calculatePrice({
+    required int fromRegionId,
+    required int toRegionId,
+    required String serviceType,
+    int? passengers,
+  }) async {
+    final query = <String, dynamic>{
+      'from_region_id': fromRegionId,
+      'to_region_id': toRegionId,
+      'service_type': serviceType,
+    };
+    if (passengers != null) {
+      query['passengers'] = passengers;
+    }
+    final response = await _request(
+      'GET',
+      '/regions/pricing/calculate',
+      query: query,
+    );
+    if (response is Map<String, dynamic>) {
+      return response;
+    }
+    throw ApiException('Invalid response from price calculation');
+  }
+
   Future<Map<String, dynamic>> uploadProfilePicture(File file) {
     return _uploadMultipart(path: '/auth/upload-profile-picture', file: file);
   }
