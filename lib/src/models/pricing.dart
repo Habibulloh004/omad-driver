@@ -42,14 +42,14 @@ class PricingModel {
   final bool isActive;
 
   double priceForPassengers(int passengers) {
-    final discount = switch (passengers) {
-      1 => discountOnePassenger,
-      2 => discountTwoPassengers,
-      3 => discountThreePassengers,
-      4 => discountFullCar,
-      _ => 0.0,
-    };
-    return _applyDiscount(discount);
+    // For taxi service: price per person × passengers
+    // Backend calculates: total_price = base_price * passengers
+    if (serviceType == 'taxi') {
+      return basePrice * passengers;
+    }
+
+    // For delivery: fixed price regardless of passengers
+    return basePrice;
   }
 
   double priceWithoutDiscount() => basePrice;

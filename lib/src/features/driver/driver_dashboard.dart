@@ -58,12 +58,18 @@ class _DriverDashboardState extends State<DriverDashboard> {
     final onTint = colorScheme.onPrimary;
     final onTintMuted = onTint.withValues(alpha: 0.78);
     final balanceGradient = [
-      colorScheme.primary,
-      colorScheme.secondary,
-      colorScheme.tertiary,
+      const Color(0xFF6366F1), // Indigo
+      const Color(0xFF8B5CF6), // Purple
+      const Color(0xFFA855F7), // Violet
     ];
-    final statGradient = [colorScheme.secondary, colorScheme.primary];
-    final statAltGradient = [colorScheme.tertiary, colorScheme.secondary];
+    final statGradient = [
+      const Color(0xFF10B981), // Emerald
+      const Color(0xFF059669), // Green
+    ];
+    final statAltGradient = [
+      const Color(0xFFF59E0B), // Amber
+      const Color(0xFFEF4444), // Red
+    ];
     _drainDriverRealtimeToasts(state);
     final user = state.currentUser;
     final stats = state.driverStats;
@@ -162,7 +168,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -204,7 +210,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _tintedCard(
                     gradient: statAltGradient,
@@ -246,7 +252,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                 ),
               ],
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -377,6 +383,17 @@ class _DriverDashboardState extends State<DriverDashboard> {
             end: Alignment.bottomRight,
             colors: gradient,
           ),
+          border: Border.all(
+            color: gradient.first.withValues(alpha: 0.6),
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: gradient.first.withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Stack(
           children: [

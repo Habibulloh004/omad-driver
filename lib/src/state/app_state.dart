@@ -746,7 +746,8 @@ class AppState extends ChangeNotifier {
     if (pricing == null) {
       return null;
     }
-    return pricing.priceWithoutDiscount();
+    // For delivery: passengers parameter is not applicable, returns base_price
+    return pricing.priceForPassengers(1);
   }
 
   Future<void> updateProfile({String? name}) async {
