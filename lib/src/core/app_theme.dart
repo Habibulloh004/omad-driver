@@ -3,12 +3,10 @@ import 'package:flutter/services.dart';
 
 import 'design_tokens.dart';
 
-const _lightScaffold = Color(0xFFF6F7FC);
 const _lightSurface = Color(0xFFFFFFFF);
 const _lightSurfaceLow = Color(0xFFF1F3FB);
 const _lightSurfaceHigh = Color(0xFFE9ECF7);
 
-const _darkScaffold = Color(0xFF0E1524);
 const _darkSurface = Color(0xFF131C30);
 const _darkSurfaceLow = Color(0xFF172135);
 const _darkSurfaceHigh = Color(0xFF1D2942);
@@ -108,7 +106,7 @@ ThemeData buildLightTheme(TextTheme baseTextTheme) {
   return _buildTheme(
     baseTextTheme: baseTextTheme,
     colorScheme: colorScheme,
-    scaffoldBackground: _lightScaffold,
+    scaffoldBackground: Colors.transparent,
     outlineVariant: _lightOutlineVariant,
     isDark: false,
   );
@@ -151,7 +149,7 @@ ThemeData buildDarkTheme(TextTheme baseTextTheme) {
   return _buildTheme(
     baseTextTheme: baseTextTheme,
     colorScheme: colorScheme,
-    scaffoldBackground: _darkScaffold,
+    scaffoldBackground: Colors.transparent,
     outlineVariant: _darkOutlineVariant,
     isDark: true,
   );

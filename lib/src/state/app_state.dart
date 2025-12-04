@@ -883,12 +883,30 @@ class AppState extends ChangeNotifier {
     required String carModel,
     required String carNumber,
     required File licenseFile,
+    required File carPhotoFile,
+    required File texPasFile,
   }) async {
-    final upload = await _api.uploadDriverLicense(licenseFile);
-    final uploadedPath = upload['file_path']?.toString() ?? '';
-    if (uploadedPath.isEmpty) {
+    final licenseUpload = await _api.uploadDriverLicense(licenseFile);
+    final licensePath = licenseUpload['file_path']?.toString() ?? '';
+    if (licensePath.isEmpty) {
       throw const ApiException(
         'Failed to upload license photo',
+        statusCode: 400,
+      );
+    }
+    final carUpload = await _api.uploadDriverCarPhoto(carPhotoFile);
+    final carPhotoPath = carUpload['file_path']?.toString() ?? '';
+    if (carPhotoPath.isEmpty) {
+      throw const ApiException(
+        'Failed to upload car photo',
+        statusCode: 400,
+      );
+    }
+    final texUpload = await _api.uploadDriverTexPas(texPasFile);
+    final texPasPath = texUpload['file_path']?.toString() ?? '';
+    if (texPasPath.isEmpty) {
+      throw const ApiException(
+        'Failed to upload tex pas photo',
         statusCode: 400,
       );
     }
@@ -896,7 +914,9 @@ class AppState extends ChangeNotifier {
       fullName: fullName.trim(),
       carModel: carModel.trim(),
       carNumber: carNumber.trim(),
-      licensePath: uploadedPath,
+      licensePath: licensePath,
+      carPhotoPath: carPhotoPath,
+      texPasPath: texPasPath,
     );
     _driverApplicationSubmitted = true;
     _currentUser = _currentUser.copyWith(fullName: fullName.trim());
@@ -2912,8 +2932,16 @@ class AppState extends ChangeNotifier {
   DriverProfile _mapDriverProfile(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
     final license = normalized['license_photo']?.toString() ?? '';
+    final carPhoto = normalized['car_photo']?.toString() ?? '';
+    final texPas = normalized['tex_pas']?.toString() ?? '';
     if (license.isNotEmpty) {
       normalized['license_photo'] = _resolveAssetUrl(license);
+    }
+    if (carPhoto.isNotEmpty) {
+      normalized['car_photo'] = _resolveAssetUrl(carPhoto);
+    }
+    if (texPas.isNotEmpty) {
+      normalized['tex_pas'] = _resolveAssetUrl(texPas);
     }
     return DriverProfile.fromJson(normalized);
   }

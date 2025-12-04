@@ -256,24 +256,24 @@ class _DriverDashboardState extends State<DriverDashboard> {
             Row(
               children: [
                 Expanded(
-                  child: FilledButton.icon(
-                    icon: const Icon(Icons.history_rounded),
-                    label: Text(strings.tr('orderHistory')),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const DriverOrderHistoryPage(),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
                   child: FilledButton.tonalIcon(
                     icon: const Icon(Icons.move_to_inbox_rounded),
                     label: Text(strings.tr('incomingOrders')),
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const DriverIncomingOrdersPage(),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.history_rounded),
+                    label: Text(strings.tr('orderHistory')),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const DriverOrderHistoryPage(),
                       ),
                     ),
                   ),
@@ -1172,7 +1172,9 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
     setState(() => _completing = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await context.read<AppState>().completeDriverOrder(widget.order);
+      final state = context.read<AppState>();
+      await state.completeDriverOrder(widget.order);
+      unawaited(state.refreshDriverDashboard(force: true));
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text(strings.tr('orderCompleted'))),
@@ -1349,6 +1351,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     try {
       final state = context.read<AppState>();
       await state.acceptDriverOrder(_order);
+      unawaited(state.refreshDriverDashboard(force: true));
       if (!mounted) return;
       _stopSent = true;
       _holdReleased = true;

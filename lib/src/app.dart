@@ -38,16 +38,31 @@ class MobileTaxiApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            builder: (context, child) => ColoredBox(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: SafeArea(
-                top: false,
-                left: false,
-                right: false,
-                bottom: true,
-                child: child ?? const SizedBox.shrink(),
-              ),
-            ),
+            builder: (context, child) {
+              const gradientStops = [0.0, 0.5, 1.0];
+              const gradientColors = [
+                Color(0xFF6E41FF),
+                Color(0xFF8B62FF),
+                Color(0xFFCEB7FF),
+              ];
+              return DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: gradientStops,
+                    colors: gradientColors,
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  left: false,
+                  right: false,
+                  bottom: true,
+                  child: child ?? const SizedBox.shrink(),
+                ),
+              );
+            },
             home: const RootShell(),
           );
         },

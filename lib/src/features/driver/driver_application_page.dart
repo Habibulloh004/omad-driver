@@ -26,6 +26,8 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
   final TextEditingController carNumberCtrl = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   File? _licenseFile;
+  File? _carPhotoFile;
+  File? _texPasFile;
 
   bool loading = false;
 
@@ -106,6 +108,34 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
                                 .last,
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Text(strings.tr('driverCarPhotoUpload')),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: loading ? null : _pickCarPhoto,
+                    icon: const Icon(Icons.directions_car_filled_rounded),
+                    label: Text(
+                      _carPhotoFile == null
+                          ? strings.tr('uploadPlaceholder')
+                          : _carPhotoFile!.path
+                                .split(Platform.pathSeparator)
+                                .last,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(strings.tr('driverTexPasUpload')),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: loading ? null : _pickTexPas,
+                    icon: const Icon(Icons.insert_drive_file_rounded),
+                    label: Text(
+                      _texPasFile == null
+                          ? strings.tr('uploadPlaceholder')
+                          : _texPasFile!.path
+                                .split(Platform.pathSeparator)
+                                .last,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -132,7 +162,9 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
     }
 
     final licenseFile = _licenseFile;
-    if (licenseFile == null) {
+    final carPhotoFile = _carPhotoFile;
+    final texPasFile = _texPasFile;
+    if (licenseFile == null || carPhotoFile == null || texPasFile == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(strings.tr('noImageSelected'))));
@@ -146,6 +178,8 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
         carModel: carModelCtrl.text,
         carNumber: carNumberCtrl.text,
         licenseFile: licenseFile,
+        carPhotoFile: carPhotoFile,
+        texPasFile: texPasFile,
       );
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -182,5 +216,25 @@ class _DriverApplicationPageState extends State<DriverApplicationPage> {
     );
     if (picked == null) return;
     setState(() => _licenseFile = File(picked.path));
+  }
+
+  Future<void> _pickCarPhoto() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1800,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+    setState(() => _carPhotoFile = File(picked.path));
+  }
+
+  Future<void> _pickTexPas() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1800,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+    setState(() => _texPasFile = File(picked.path));
   }
 }

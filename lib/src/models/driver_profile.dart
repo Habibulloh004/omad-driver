@@ -6,6 +6,8 @@ class DriverProfile {
     required this.carModel,
     required this.carNumber,
     required this.licensePhotoUrl,
+    required this.carPhotoUrl,
+    required this.texPasUrl,
     required this.rating,
     required this.balance,
     required this.isBlocked,
@@ -36,6 +38,8 @@ class DriverProfile {
       carModel: (json['car_model'] ?? '').toString(),
       carNumber: (json['car_number'] ?? '').toString(),
       licensePhotoUrl: (json['license_photo'] ?? '').toString(),
+      carPhotoUrl: (json['car_photo'] ?? '').toString(),
+      texPasUrl: (json['tex_pas'] ?? '').toString(),
       rating: parseDouble(json['rating']),
       balance: parseDouble(
         json['balance'] ?? json['driver_balance'] ?? json['wallet_balance'],
@@ -51,6 +55,8 @@ class DriverProfile {
   final String carModel;
   final String carNumber;
   final String licensePhotoUrl;
+  final String carPhotoUrl;
+  final String texPasUrl;
   final double rating;
   final double balance;
   final bool isBlocked;
@@ -61,6 +67,8 @@ class DriverProfile {
     String? carModel,
     String? carNumber,
     String? licensePhotoUrl,
+    String? carPhotoUrl,
+    String? texPasUrl,
     double? rating,
     double? balance,
     bool? isBlocked,
@@ -73,6 +81,8 @@ class DriverProfile {
       carModel: carModel ?? this.carModel,
       carNumber: carNumber ?? this.carNumber,
       licensePhotoUrl: licensePhotoUrl ?? this.licensePhotoUrl,
+      carPhotoUrl: carPhotoUrl ?? this.carPhotoUrl,
+      texPasUrl: texPasUrl ?? this.texPasUrl,
       rating: rating ?? this.rating,
       balance: balance ?? this.balance,
       isBlocked: isBlocked ?? this.isBlocked,

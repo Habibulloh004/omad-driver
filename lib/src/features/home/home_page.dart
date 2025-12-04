@@ -82,297 +82,287 @@ class _HomePageState extends State<HomePage> {
         .clamp(260.0, size.width - AppSpacing.md * 2)
         .toDouble();
 
-    return Stack(
-      children: [
-        CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.md + mediaPadding.left,
-                AppSpacing.lg + mediaPadding.top,
-                AppSpacing.md + mediaPadding.right,
-                mediaPadding.bottom + AppSpacing.xxl * 2 + AppSpacing.lg,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md + mediaPadding.left,
+            AppSpacing.lg + mediaPadding.top,
+            AppSpacing.md + mediaPadding.right,
+            mediaPadding.bottom + AppSpacing.xxl * 2 + AppSpacing.lg,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            strings.tr('homeGreeting'),
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                    Expanded(
+                      child: Text(
+                        strings.tr('homeGreeting'),
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        _NotificationButton(
-                          onTap: isAuthenticated
-                              ? widget.onOpenNotifications
-                              : () {
-                                  _requestLogin();
-                                },
-                          hasUnread: hasUnreadNotifications,
-                          activationToken: notificationSignal,
-                        ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    GlassCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              CircleAvatar(
-                                radius: 32,
-                                backgroundImage: user.avatarUrl.isEmpty
-                                    ? null
-                                    : NetworkImage(user.avatarUrl),
-                                child: user.avatarUrl.isEmpty
-                                    ? Icon(
-                                        Icons.person_rounded,
-                                        size: 32,
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.6),
-                                      )
-                                    : null,
-                              ),
-                              const SizedBox(width: AppSpacing.lg),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      displayName,
-                                      style: theme.textTheme.titleLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: AppSpacing.xs),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.phone_rounded,
-                                          size: 18,
-                                          color: theme.colorScheme.primary,
-                                        ),
-                                        const SizedBox(width: AppSpacing.xs),
-                                        Text(phoneLabel),
-                                      ],
-                                    ),
-                                    const SizedBox(height: AppSpacing.xs),
-                                    if (user.isDriver)
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.star_rounded,
-                                            size: 18,
-                                            color: theme.colorScheme.tertiary,
-                                          ),
-                                          const SizedBox(width: AppSpacing.xs),
-                                          Text(
-                                            strings
-                                                .tr('ratingWithValue')
-                                                .replaceFirst(
-                                                  '{rating}',
-                                                  user.rating.toStringAsFixed(
-                                                    1,
-                                                  ),
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: isAuthenticated
-                                    ? () => _showChangePassword(context)
-                                    : () {
-                                        _requestLogin();
-                                      },
-                                icon: Icon(
-                                  isAuthenticated
-                                      ? Icons.settings_rounded
-                                      : Icons.login_rounded,
-                                ),
-                                tooltip: isAuthenticated
-                                    ? strings.tr('changePassword')
-                                    : strings.tr('loginTitle'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              const double horizontalGap = AppSpacing.lg;
-                              const double verticalGap = AppSpacing.md;
-                              final taxiButton = GradientButton(
-                                onPressed: canOrder ? widget.onOrderTaxi : null,
-                                label: strings.tr('orderTaxi'),
-                                icon: Icons.local_taxi_rounded,
-                              );
-                              final deliveryButton = GradientButton(
-                                onPressed: canOrder
-                                    ? widget.onSendDelivery
-                                    : null,
-                                label: strings.tr('sendDelivery'),
-                                icon: Icons.delivery_dining_rounded,
-                              );
-                              if (constraints.maxWidth < 540) {
-                                return Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    taxiButton,
-                                    const SizedBox(height: verticalGap),
-                                    deliveryButton,
-                                  ],
-                                );
-                              }
-                              return Row(
-                                children: [
-                                  Expanded(child: taxiButton),
-                                  const SizedBox(width: horizontalGap),
-                                  Expanded(child: deliveryButton),
-                                ],
-                              );
+                    const SizedBox(width: AppSpacing.sm),
+                    _NotificationButton(
+                      onTap: isAuthenticated
+                          ? widget.onOpenNotifications
+                          : () {
+                              _requestLogin();
                             },
-                          ),
-                          if (!canOrder) ...[
-                            const SizedBox(height: AppSpacing.sm),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.lock_outline_rounded,
-                                  color: theme.colorScheme.primary,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: AppSpacing.xs),
-                                Expanded(
-                                  child: Text(
-                                    strings.tr('loginToOrder'),
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.7),
-                                    ),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    _requestLogin();
-                                  },
-                                  child: Text(strings.tr('loginTitle')),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
+                      hasUnread: hasUnreadNotifications,
+                      activationToken: notificationSignal,
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            strings.tr('activeOrders'),
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (activeOrders.isNotEmpty) ...[
-                          _ActiveOrdersPagerButton(
-                            icon: Icons.chevron_left_rounded,
-                            tooltip: localizations.previousPageTooltip,
-                            onPressed: () => _animateActiveOrdersScroll(
-                              forward: false,
-                              step: highlightWidth + AppSpacing.md,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          _ActiveOrdersPagerButton(
-                            icon: Icons.chevron_right_rounded,
-                            tooltip: localizations.nextPageTooltip,
-                            onPressed: () => _animateActiveOrdersScroll(
-                              forward: true,
-                              step: highlightWidth + AppSpacing.md,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    SingleChildScrollView(
-                      controller: _activeOrdersController,
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      clipBehavior: Clip.none,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.xxs,
-                      ),
-                      child: Row(
-                        children: [
-                          if (activeOrders.isEmpty)
-                            _EmptyCard(
-                              width: highlightWidth,
-                              message: activeEmptyText,
-                            )
-                          else
-                            for (var i = 0; i < activeOrders.length; i++) ...[
-                              if (i != 0) const SizedBox(width: AppSpacing.md),
-                              _OrderHighlightCard(
-                                order: activeOrders[i],
-                                width: highlightWidth,
-                              ),
-                            ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                      child: _SectionDivider(),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      strings.tr('recentOrders'),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    if (historyOrders.isEmpty)
-                      _EmptyCard(
-                        width: double.infinity,
-                        message: historyEmptyText,
-                      )
-                    else
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var i = 0; i < historyOrders.length; i++) ...[
-                            _OrderListTile(order: historyOrders[i]),
-                            if (i != historyOrders.length - 1)
-                              const SizedBox(height: AppSpacing.sm),
-                          ],
-                        ],
-                      ),
                   ],
                 ),
-              ),
+                const SizedBox(height: AppSpacing.md),
+                GlassCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 32,
+                            backgroundImage: user.avatarUrl.isEmpty
+                                ? null
+                                : NetworkImage(user.avatarUrl),
+                            child: user.avatarUrl.isEmpty
+                                ? Icon(
+                                    Icons.person_rounded,
+                                    size: 32,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.6),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: AppSpacing.lg),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  displayName,
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: AppSpacing.xs),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.phone_rounded,
+                                      size: 18,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: AppSpacing.xs),
+                                    Text(phoneLabel),
+                                  ],
+                                ),
+                                const SizedBox(height: AppSpacing.xs),
+                                if (user.isDriver)
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.star_rounded,
+                                        size: 18,
+                                        color: theme.colorScheme.tertiary,
+                                      ),
+                                      const SizedBox(width: AppSpacing.xs),
+                                      Text(
+                                        strings
+                                            .tr('ratingWithValue')
+                                            .replaceFirst(
+                                              '{rating}',
+                                              user.rating.toStringAsFixed(1),
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: isAuthenticated
+                                ? () => _showChangePassword(context)
+                                : () {
+                                    _requestLogin();
+                                  },
+                            icon: Icon(
+                              isAuthenticated
+                                  ? Icons.settings_rounded
+                                  : Icons.login_rounded,
+                            ),
+                            tooltip: isAuthenticated
+                                ? strings.tr('changePassword')
+                                : strings.tr('loginTitle'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          const double horizontalGap = AppSpacing.lg;
+                          const double verticalGap = AppSpacing.md;
+                          final taxiButton = GradientButton(
+                            onPressed: canOrder ? widget.onOrderTaxi : null,
+                            label: strings.tr('orderTaxi'),
+                            icon: Icons.local_taxi_rounded,
+                          );
+                          final deliveryButton = GradientButton(
+                            onPressed: canOrder ? widget.onSendDelivery : null,
+                            label: strings.tr('sendDelivery'),
+                            icon: Icons.delivery_dining_rounded,
+                          );
+                          if (constraints.maxWidth < 540) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                taxiButton,
+                                const SizedBox(height: verticalGap),
+                                deliveryButton,
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              Expanded(child: taxiButton),
+                              const SizedBox(width: horizontalGap),
+                              Expanded(child: deliveryButton),
+                            ],
+                          );
+                        },
+                      ),
+                      if (!canOrder) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.lock_outline_rounded,
+                              color: theme.colorScheme.primary,
+                              size: 18,
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Expanded(
+                              child: Text(
+                                strings.tr('loginToOrder'),
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                _requestLogin();
+                              },
+                              child: Text(strings.tr('loginTitle')),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        strings.tr('activeOrders'),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (activeOrders.isNotEmpty) ...[
+                      _ActiveOrdersPagerButton(
+                        icon: Icons.chevron_left_rounded,
+                        tooltip: localizations.previousPageTooltip,
+                        onPressed: () => _animateActiveOrdersScroll(
+                          forward: false,
+                          step: highlightWidth + AppSpacing.md,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      _ActiveOrdersPagerButton(
+                        icon: Icons.chevron_right_rounded,
+                        tooltip: localizations.nextPageTooltip,
+                        onPressed: () => _animateActiveOrdersScroll(
+                          forward: true,
+                          step: highlightWidth + AppSpacing.md,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SingleChildScrollView(
+                  controller: _activeOrdersController,
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  clipBehavior: Clip.none,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.xxs,
+                  ),
+                  child: Row(
+                    children: [
+                      if (activeOrders.isEmpty)
+                        _EmptyCard(
+                          width: highlightWidth,
+                          message: activeEmptyText,
+                        )
+                      else
+                        for (var i = 0; i < activeOrders.length; i++) ...[
+                          if (i != 0) const SizedBox(width: AppSpacing.md),
+                          _OrderHighlightCard(
+                            order: activeOrders[i],
+                            width: highlightWidth,
+                          ),
+                        ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: _SectionDivider(),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  strings.tr('recentOrders'),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                if (historyOrders.isEmpty)
+                  _EmptyCard(
+                    width: double.infinity,
+                    message: historyEmptyText,
+                  )
+                else
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < historyOrders.length; i++) ...[
+                        _OrderListTile(order: historyOrders[i]),
+                        if (i != historyOrders.length - 1)
+                          const SizedBox(height: AppSpacing.sm),
+                      ],
+                    ],
+                  ),
+              ],
             ),
-          ],
+          ),
         ),
       ],
     );

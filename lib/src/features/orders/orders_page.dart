@@ -470,7 +470,10 @@ class _OrdersPageState extends State<OrdersPage>
                       color: theme.colorScheme.secondary
                           .withValues(alpha: 0.08),
                     ),
-                    child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
                         Icon(
                           Icons.star_rounded,
@@ -483,7 +486,8 @@ class _OrdersPageState extends State<OrdersPage>
                             children: [
                               Text(
                                 strings.tr('rateDriver'),
-                                style: theme.textTheme.titleMedium?.copyWith(
+                                style:
+                                    theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -491,7 +495,8 @@ class _OrdersPageState extends State<OrdersPage>
                               Text(
                                 showRatingCta
                                     ? strings.tr('rateDriverSubtitle')
-                                    : strings.tr('ratingAlreadySubmitted'),
+                                    : strings
+                                        .tr('ratingAlreadySubmitted'),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color:
                                       theme.colorScheme.onSurfaceVariant,
@@ -500,31 +505,35 @@ class _OrdersPageState extends State<OrdersPage>
                             ],
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        if (showRatingCta)
-                          FilledButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              _showRatingSheet(order);
-                            },
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.md,
-                                vertical: AppSpacing.sm,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: AppRadii.pillRadius,
-                              ),
-                            ),
-                            child: Text(strings.tr('rateDriver')),
-                          )
-                        else
-                          Icon(
-                            Icons.check_circle_rounded,
-                            color: const Color(0xFF10B981),
-                          ),
                       ],
                     ),
+                    if (showRatingCta) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _showRatingSheet(order);
+                        },
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: AppRadii.pillRadius,
+                          ),
+                        ),
+                        child: Text(strings.tr('rateDriver')),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: const Color(0xFF10B981),
+                      ),
+                    ],
+                  ],
+                ),
                   ),
                 ],
               ],

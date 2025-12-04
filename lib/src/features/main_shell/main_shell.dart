@@ -137,8 +137,8 @@ class _FrostedNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final backgroundAlpha = isDark ? 0.32 : 0.68;
-    final borderAlpha = isDark ? 0.38 : 0.18;
+    final backgroundAlpha = isDark ? 0.88 : 0.96;
+    final borderAlpha = isDark ? 0.34 : 0.32;
     final highlightColor = theme.colorScheme.primary;
 
     return Padding(
@@ -155,21 +155,21 @@ class _FrostedNavBar extends StatelessWidget {
             horizontal: AppSpacing.md,
             vertical: AppSpacing.sm,
           ),
-          decoration: BoxDecoration(
-            borderRadius: AppRadii.pillRadius,
-            color: theme.colorScheme.surface.withValues(
-              alpha: backgroundAlpha,
-            ),
-            border: Border.all(
-              color: theme.colorScheme.outlineVariant.withValues(
-                alpha: borderAlpha,
+            decoration: BoxDecoration(
+              borderRadius: AppRadii.pillRadius,
+              color: theme.colorScheme.surface.withValues(
+                alpha: backgroundAlpha,
+              ),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(
+                  alpha: borderAlpha,
+                ),
+              ),
+              boxShadow: AppShadows.soft(
+                baseColor: theme.colorScheme.primary,
+                isDark: isDark,
               ),
             ),
-            boxShadow: AppShadows.soft(
-              baseColor: theme.colorScheme.primary,
-              isDark: isDark,
-            ),
-          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final itemWidth = constraints.maxWidth / items.length;

@@ -199,6 +199,18 @@ class ApiClient {
     return _uploadMultipart(path: '/driver/upload-license', file: file);
   }
 
+  Future<Map<String, dynamic>> uploadDriverCarPhoto(File file) {
+    // Backend currently exposes only /driver/upload-license for driver files.
+    // Reuse the same endpoint for car photos.
+    return _uploadMultipart(path: '/driver/upload-license', file: file);
+  }
+
+  Future<Map<String, dynamic>> uploadDriverTexPas(File file) {
+    // Backend currently exposes only /driver/upload-license for driver files.
+    // Reuse the same endpoint for tex passport photos.
+    return _uploadMultipart(path: '/driver/upload-license', file: file);
+  }
+
   Future<List<Map<String, dynamic>>> fetchUserOrders({
     String? status,
     String? type,
@@ -375,6 +387,8 @@ class ApiClient {
     required String carModel,
     required String carNumber,
     required String licensePath,
+    required String carPhotoPath,
+    required String texPasPath,
   }) async {
     final response = await _request(
       'POST',
@@ -385,6 +399,8 @@ class ApiClient {
         'car_model': carModel,
         'car_number': carNumber,
         'license_photo': licensePath,
+        'car_photo': carPhotoPath,
+        'tex_pas': texPasPath,
       },
     );
     return _ensureMap(response);
