@@ -7,9 +7,13 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 typedef RealtimeHandler = FutureOr<void> Function(Map<String, dynamic> payload);
 
 class RealtimeGateway {
-  RealtimeGateway({required this.baseUrl});
+  RealtimeGateway({
+    required this.baseUrl,
+    this.enabled = true,
+  });
 
   final String baseUrl;
+  final bool enabled;
 
   RealtimeHandler? _onUserEvent;
   RealtimeHandler? _onDriverEvent;
@@ -56,6 +60,15 @@ class RealtimeGateway {
     required bool enableUserChannel,
     required bool enableDriverChannel,
   }) {
+    if (!enabled) {
+      _userEnabled = false;
+      _driverEnabled = false;
+      _closeChannel(_RealtimeChannel.user);
+      _closeChannel(_RealtimeChannel.driver);
+      _token = (token == null || token.trim().isEmpty) ? null : token.trim();
+      return;
+    }
+
     final normalizedToken = (token == null || token.trim().isEmpty)
         ? null
         : token.trim();
@@ -171,7 +184,7 @@ class RealtimeGateway {
   }
 
   void sendDriverEvent(Map<String, Object?> payload) {
-    if (!_driverEnabled) return;
+    if (!_driverEnabled || !enabled) return;
     _send(_RealtimeChannel.driver, payload);
   }
 

@@ -26,6 +26,8 @@ class SessionStorage {
   static const _savedAtKey = 'session_saved_at';
   static const _driverPreviewAnchorsKey = 'driver_preview_anchors';
   static const _ratedOrdersKey = 'rated_orders';
+  static const _driverIncomingSoundKey = 'driver_incoming_sound';
+  static const _driverIncomingOrdersKey = 'driver_incoming_orders';
 
   static Future<SessionStorage> getInstance() async {
     final prefs = await SharedPreferences.getInstance();
@@ -80,6 +82,8 @@ class SessionStorage {
       _prefs.remove(_savedAtKey),
       _prefs.remove(_driverPreviewAnchorsKey),
       _prefs.remove(_ratedOrdersKey),
+      _prefs.remove(_driverIncomingSoundKey),
+      _prefs.remove(_driverIncomingOrdersKey),
     ]);
   }
 
@@ -125,5 +129,25 @@ class SessionStorage {
       return;
     }
     await _prefs.setStringList(_ratedOrdersKey, orderIds.toList());
+  }
+
+  Future<({bool incomingSoundEnabled, bool incomingOrdersEnabled})>
+      readDriverPreferences() async {
+    final soundEnabled = _prefs.getBool(_driverIncomingSoundKey);
+    final ordersEnabled = _prefs.getBool(_driverIncomingOrdersKey);
+    return (
+      incomingSoundEnabled: soundEnabled ?? true,
+      incomingOrdersEnabled: ordersEnabled ?? true,
+    );
+  }
+
+  Future<void> saveDriverPreferences({
+    required bool incomingSoundEnabled,
+    required bool incomingOrdersEnabled,
+  }) async {
+    await Future.wait<bool?>([
+      _prefs.setBool(_driverIncomingSoundKey, incomingSoundEnabled),
+      _prefs.setBool(_driverIncomingOrdersKey, incomingOrdersEnabled),
+    ]);
   }
 }

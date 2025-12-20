@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -22,7 +23,11 @@ import '../storage/session_storage.dart';
 class AppState extends ChangeNotifier {
   AppState({ApiClient? apiClient, RealtimeGateway? realtime})
     : _api = apiClient ?? ApiClient(),
-      _realtime = realtime ?? RealtimeGateway(baseUrl: backendBaseUrl) {
+      _realtime = realtime ??
+          RealtimeGateway(
+            baseUrl: backendBaseUrl,
+            enabled: false,
+          ) {
     _api.setUnauthorizedHandler(_handleUnauthorizedLogout);
     _realtime.setHandlers(
       onUserEvent: _handleUserRealtimeEvent,
@@ -36,6 +41,10 @@ class AppState extends ChangeNotifier {
   static const Duration _serverTimeOffset = Duration(hours: 5);
   static const int _ordersPageSize = 20;
   static const int _driverOrdersPageSize = 10;
+  static const int _driverRealtimePollLimit = 50;
+  static const Duration _userRealtimePollInterval = Duration(seconds: 1);
+  static const Duration _driverRealtimePollInterval = Duration(seconds: 1);
+  static const Duration _notificationPollInterval = Duration(seconds: 1);
   static const Set<String> _driverEligibleRoles = {
     'driver',
     'admin',
@@ -102,6 +111,15 @@ class AppState extends ChangeNotifier {
   int? _driverProfileId;
   int _notificationSignal = 0;
   String? _lastDriverStatusEventId;
+  Timer? _userRealtimeTimer;
+  Timer? _driverRealtimeTimer;
+  Timer? _notificationTimer;
+  bool _userRealtimeTickRunning = false;
+  bool _driverRealtimeTickRunning = false;
+  bool _notificationTickRunning = false;
+  bool _driverIncomingOrdersEnabled = true;
+  bool _driverIncomingSoundEnabled = true;
+  AudioPlayer? _driverIncomingPlayer;
 
   AppLocalizations get localization => AppLocalizations(_locale);
   AppUser get currentUser => _currentUser;
@@ -110,6 +128,8 @@ class AppState extends ChangeNotifier {
   bool get isAuthenticated => _isAuthenticated;
   bool get isDriverMode => _isDriverMode && _currentUser.isDriver;
   bool get isDriverApproved => _currentUser.driverApproved;
+  bool get driverIncomingOrdersEnabled => _driverIncomingOrdersEnabled;
+  bool get driverIncomingSoundEnabled => _driverIncomingSoundEnabled;
   bool get driverApplicationSubmitted => _driverApplicationSubmitted;
   bool get isBootstrapping => _bootstrapping;
   String? get authToken => _authToken;
@@ -229,6 +249,28 @@ class AppState extends ChangeNotifier {
     _themeMode = _themeMode == ThemeMode.light
         ? ThemeMode.dark
         : ThemeMode.light;
+    notifyListeners();
+  }
+
+  Future<void> setDriverIncomingSoundEnabled(bool enabled) async {
+    if (_driverIncomingSoundEnabled == enabled) return;
+    _driverIncomingSoundEnabled = enabled;
+    await _persistDriverPreferences();
+    notifyListeners();
+  }
+
+  Future<void> setDriverIncomingOrdersEnabled(bool enabled) async {
+    if (_driverIncomingOrdersEnabled == enabled) return;
+    _driverIncomingOrdersEnabled = enabled;
+    await _persistDriverPreferences();
+    if (enabled) {
+      if (_isAuthenticated && _currentUser.isDriver && _currentUser.driverApproved) {
+        _startDriverRealtimeTimer();
+        unawaited(_pollDriverRealtime());
+      }
+    } else {
+      _stopDriverRealtimePolling();
+    }
     notifyListeners();
   }
 
@@ -819,6 +861,7 @@ class AppState extends ChangeNotifier {
   Future<void> logout() async {
     await _ensureStorage();
     await _sessionStorage?.clear();
+    _stopRealtimePolling();
     _authToken = null;
     _api.updateToken(null);
     _isAuthenticated = false;
@@ -850,6 +893,8 @@ class AppState extends ChangeNotifier {
     _bootstrapping = false;
     _driverProfileId = null;
     _lastDriverStatusEventId = null;
+    _driverIncomingOrdersEnabled = true;
+    _driverIncomingSoundEnabled = true;
     _driverOrderPreviewAnchors.clear();
     _driverOrderViewerCounts.clear();
     _lastPassengerOrderEvents.clear();
@@ -1650,6 +1695,7 @@ class AppState extends ChangeNotifier {
 
     switch (eventType) {
       case 'new_order':
+        if (!_driverIncomingOrdersEnabled) break;
         final orderPayload = payload['order'];
         Map<String, dynamic>? orderMap;
         if (orderPayload is Map<String, dynamic>) {
@@ -1838,13 +1884,29 @@ class AppState extends ChangeNotifier {
 
   void _announceDriverNewOrder(AppOrder order) {
     if (_notificationsMuted) return;
+    if (!_driverIncomingOrdersEnabled) return;
     if (!_matchesDriverIncomingFilters(order)) return;
+    unawaited(_playDriverIncomingAlert());
     final title = order.isDelivery
         ? localization.tr('deliveryOrder')
         : localization.tr('taxiOrder');
     final message = '${order.fromRegion} -> ${order.toRegion}';
     _enqueueDriverRealtimeMessage(title: title, message: message);
     _prependRealtimeNotification(title, message);
+  }
+
+  Future<void> _playDriverIncomingAlert() async {
+    if (_notificationsMuted) return;
+    if (!_driverIncomingSoundEnabled) return;
+    try {
+      _driverIncomingPlayer ??= AudioPlayer();
+      await _driverIncomingPlayer!.stop();
+      await _driverIncomingPlayer!.play(
+        AssetSource('notification.mp3'),
+      );
+    } catch (_) {
+      // Ignore audio playback failures; polling will continue.
+    }
   }
 
   void _enqueueUserRealtimeMessage({
@@ -2542,6 +2604,9 @@ class AppState extends ChangeNotifier {
     _isAuthenticated = true;
     _isDriverMode = _currentUser.isDriver;
     _driverApplicationSubmitted = false;
+    final driverPrefs = await storage.readDriverPreferences();
+    _driverIncomingSoundEnabled = driverPrefs.incomingSoundEnabled;
+    _driverIncomingOrdersEnabled = driverPrefs.incomingOrdersEnabled;
     _refreshRealtimeConnections();
     final anchors = await storage.readDriverPreviewAnchors();
     if (anchors.isNotEmpty) {
@@ -2573,6 +2638,10 @@ class AppState extends ChangeNotifier {
     }
     await storage.saveDriverPreviewAnchors(_driverOrderPreviewAnchors);
     await storage.saveRatedOrders(_ratedOrders);
+    await storage.saveDriverPreferences(
+      incomingSoundEnabled: _driverIncomingSoundEnabled,
+      incomingOrdersEnabled: _driverIncomingOrdersEnabled,
+    );
   }
 
   Future<void> _persistRatedOrders() async {
@@ -2580,6 +2649,16 @@ class AppState extends ChangeNotifier {
     final storage = _sessionStorage;
     if (storage == null) return;
     await storage.saveRatedOrders(_ratedOrders);
+  }
+
+  Future<void> _persistDriverPreferences() async {
+    await _ensureStorage();
+    final storage = _sessionStorage;
+    if (storage == null) return;
+    await storage.saveDriverPreferences(
+      incomingSoundEnabled: _driverIncomingSoundEnabled,
+      incomingOrdersEnabled: _driverIncomingOrdersEnabled,
+    );
   }
 
   void _markOrderRated(String orderId) {
@@ -2749,7 +2828,10 @@ class AppState extends ChangeNotifier {
     return _driverEligibleRoles.contains(role.toLowerCase());
   }
 
-  Future<void> _syncDriverContext({bool loadDashboard = false}) async {
+  Future<void> _syncDriverContext({
+    bool loadDashboard = false,
+    bool refreshRealtime = true,
+  }) async {
     if (!_isAuthenticated) return;
     try {
       final status = await _api.fetchDriverStatus();
@@ -2816,12 +2898,14 @@ class AppState extends ChangeNotifier {
         _driverCompletedLoadingMore = false;
         _driverStats = null;
         _isDriverMode = false;
-        if (!roleAllowsDriver) {
+      if (!roleAllowsDriver) {
           _driverProfile = null;
         }
       }
       await _saveSessionSnapshot();
-      _refreshRealtimeConnections();
+      if (refreshRealtime) {
+        _refreshRealtimeConnections();
+      }
       if (isDriver && driverApproved && loadDashboard) {
         try {
           await refreshDriverDashboard(force: true);
@@ -2846,6 +2930,251 @@ class AppState extends ChangeNotifier {
           _currentUser.isDriver &&
           _currentUser.driverApproved,
     );
+    final hasSession = _isAuthenticated && hasToken;
+    if (hasSession) {
+      _startRealtimePolling();
+    } else {
+      _stopRealtimePolling();
+    }
+  }
+
+  void _startRealtimePolling() {
+    _stopRealtimePolling();
+    _userRealtimeTimer = Timer.periodic(
+      _userRealtimePollInterval,
+      (_) => unawaited(_pollPassengerRealtime()),
+    );
+    _notificationTimer = Timer.periodic(
+      _notificationPollInterval,
+      (_) => unawaited(_pollNotificationsRealtime()),
+    );
+    if (_currentUser.isDriver &&
+        _currentUser.driverApproved &&
+        _driverIncomingOrdersEnabled) {
+      _startDriverRealtimeTimer();
+    }
+    unawaited(_pollNotificationsRealtime());
+    unawaited(_pollPassengerRealtime());
+    if (_currentUser.isDriver &&
+        _currentUser.driverApproved &&
+        _driverIncomingOrdersEnabled) {
+      unawaited(_pollDriverRealtime());
+    }
+  }
+
+  void _startDriverRealtimeTimer() {
+    _stopDriverRealtimePolling();
+    _driverRealtimeTimer = Timer.periodic(
+      _driverRealtimePollInterval,
+      (_) => unawaited(_pollDriverRealtime()),
+    );
+  }
+
+  void _stopDriverRealtimePolling() {
+    _driverRealtimeTimer?.cancel();
+    _driverRealtimeTimer = null;
+    _driverRealtimeTickRunning = false;
+  }
+
+  void _stopRealtimePolling() {
+    _userRealtimeTimer?.cancel();
+    _stopDriverRealtimePolling();
+    _notificationTimer?.cancel();
+    _userRealtimeTimer = null;
+    _notificationTimer = null;
+    _userRealtimeTickRunning = false;
+    _notificationTickRunning = false;
+  }
+
+  Future<void> _pollPassengerRealtime() async {
+    if (!_isAuthenticated) return;
+    if (_bootstrapping || _handlingUnauthorizedLogout) return;
+    if (_ordersLoadingMore || _userRealtimeTickRunning) return;
+    final activeOrders = _orders
+        .where(
+          (order) =>
+              order.status == OrderStatus.pending ||
+              order.status == OrderStatus.active,
+        )
+        .toList();
+    if (activeOrders.isEmpty) return;
+
+    _userRealtimeTickRunning = true;
+    try {
+      final fetches = <Future<AppOrder?>>[];
+      for (final order in activeOrders) {
+        final numericId = int.tryParse(order.id);
+        if (numericId == null) continue;
+        fetches.add(
+          _api
+              .fetchOrder(id: numericId, type: order.type)
+              .then(
+                (json) => AppOrder.fromJson(
+                  json,
+                  resolveRegionName: _regionDisplayNameById,
+                  resolveDistrictName: _districtDisplayNameById,
+                  fallbackType: order.type,
+                ),
+              )
+              .catchError((_) => null),
+        );
+      }
+      if (fetches.isEmpty) return;
+      final results = await Future.wait(fetches);
+      var changed = false;
+      for (final updated in results) {
+        if (updated == null) continue;
+        if (_mergePassengerOrderFromDriverContext(updated)) {
+          changed = true;
+        }
+      }
+      if (changed) {
+        notifyListeners();
+      }
+    } catch (_) {
+      // Swallow background passenger poll errors.
+    } finally {
+      _userRealtimeTickRunning = false;
+    }
+  }
+
+  Future<void> _pollNotificationsRealtime() async {
+    if (_notificationsMuted) return;
+    if (!_isAuthenticated || _handlingUnauthorizedLogout) return;
+    if (_notificationTickRunning) return;
+    _notificationTickRunning = true;
+    try {
+      await refreshNotifications();
+      final shouldSyncDriverStatus =
+          _driverApplicationSubmitted ||
+          (_currentUser.isDriver && !_currentUser.driverApproved);
+      if (shouldSyncDriverStatus && !_driverContextLoading) {
+        try {
+          await _syncDriverContext(
+            loadDashboard: false,
+            refreshRealtime: false,
+          );
+        } catch (_) {
+          // Ignore driver status polling failures; will retry on next tick.
+        }
+      }
+    } catch (_) {
+      // Ignore notification refresh failures during background polling.
+    } finally {
+      _notificationTickRunning = false;
+    }
+  }
+
+  Future<void> _pollDriverRealtime() async {
+    if (!_isAuthenticated || !_currentUser.isDriver || !_currentUser.driverApproved) {
+      return;
+    }
+    if (!_driverIncomingOrdersEnabled) return;
+    if (_bootstrapping) return;
+    if (_driverContextLoading ||
+        _driverAvailableLoadingMore ||
+        _driverActiveLoadingMore ||
+        _driverCompletedLoadingMore ||
+        _driverRealtimeTickRunning) {
+      return;
+    }
+
+    _driverRealtimeTickRunning = true;
+    try {
+      final previousAvailableIds = _driverAvailableOrders
+          .map((order) => order.id)
+          .toSet();
+      final pendingFuture = _loadDriverNewOrders(
+        offset: 0,
+        limit: _driverRealtimePollLimit,
+        orderType: _driverIncomingTypeFilter,
+        fromRegionId: _driverIncomingFromRegionFilter,
+        toRegionId: _driverIncomingToRegionFilter,
+      );
+      final assignedFuture = _api.fetchDriverAssignedOrders(
+        limit: _driverRealtimePollLimit,
+        offset: 0,
+      );
+      final statsFuture = _loadDriverStatistics();
+      final results = await Future.wait([
+        pendingFuture,
+        assignedFuture,
+        statsFuture,
+      ]);
+      final pending = results[0] as _PaginatedDriverOrders;
+      final assignedPayload = results[1] as Map<String, dynamic>;
+      final stats = results[2] as DriverStats;
+      final newAvailableOrders = pending.orders
+          .where((order) => !previousAvailableIds.contains(order.id))
+          .toList();
+      final assignedOrders = _mapDriverOrders(
+        assignedPayload,
+        usePayloadStatus: true,
+      );
+
+      _driverAvailableOrders = pending.orders;
+      _driverAvailableHasMore = pending.hasMore;
+      _driverAvailableOffset = _driverAvailableOrders.length;
+
+      final assignedHasMore = _hasMoreFromPayload(
+        assignedPayload,
+        returned: assignedOrders.length,
+        limit: _driverRealtimePollLimit,
+        offset: 0,
+      );
+      final activeOrders = <AppOrder>[];
+      final completedOrders = <AppOrder>[];
+      for (final order in assignedOrders) {
+        switch (order.status) {
+          case OrderStatus.completed:
+          case OrderStatus.cancelled:
+            completedOrders.add(order);
+            break;
+          case OrderStatus.active:
+          case OrderStatus.pending:
+            activeOrders.add(order);
+            break;
+        }
+        _mergePassengerOrderFromDriverContext(order);
+      }
+
+      _driverActiveOrders = activeOrders;
+      _driverCompletedOrders = _mergeDriverOrders(
+        _driverCompletedOrders,
+        completedOrders,
+      );
+      _driverActiveHasMore = assignedHasMore || _driverActiveHasMore;
+      _driverCompletedHasMore =
+          assignedHasMore || _driverCompletedHasMore;
+      _recomputeDriverPaginationOffsets();
+      _pruneUnaffordableAvailableOrders();
+      await _hydrateDriverServiceFees(_driverAvailableOrders);
+
+      for (final order in newAvailableOrders) {
+        _announceDriverNewOrder(order);
+      }
+
+      _driverStats = stats;
+      _currentUser = _currentUser.copyWith(
+        balance: stats.currentBalance,
+        rating: stats.rating,
+        isDriver: true,
+        driverApproved: true,
+      );
+      if (_driverProfile != null) {
+        _driverProfile = _driverProfile!.copyWith(
+          balance: stats.currentBalance,
+          rating: stats.rating,
+        );
+      }
+      notifyListeners();
+    } on ApiException {
+      // Ignore driver poll failures; next tick will retry.
+    } catch (_) {
+      // Swallow unexpected polling errors.
+    } finally {
+      _driverRealtimeTickRunning = false;
+    }
   }
 
   Future<DriverStats> _loadDriverStatistics() async {
@@ -3557,8 +3886,10 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopRealtimePolling();
     _realtime.dispose();
     _api.dispose();
+    unawaited(_driverIncomingPlayer?.dispose());
     super.dispose();
   }
 }

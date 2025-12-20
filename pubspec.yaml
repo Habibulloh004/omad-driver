@@ -51,6 +51,7 @@ dependencies:
   web_socket_channel: ^2.4.0
   android_intent_plus: ^6.0.0
   url_launcher: ^6.3.1
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -101,6 +102,9 @@ flutter:
           weight: 600
         - asset: assets/fonts/noto_sans/NotoSans-Bold.ttf
           weight: 700
+
+  assets:
+    - assets/notification.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:

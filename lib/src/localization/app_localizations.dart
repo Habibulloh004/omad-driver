@@ -95,6 +95,12 @@ class AppLocalizations {
       'language': 'Til',
       'darkMode': 'Tungi rejim',
       'darkModeDescription': 'Interfeysni qorong‘i temaga o‘tkazing',
+      'driverIncomingSound': 'Buyurtma signali',
+      'driverIncomingSoundDescription':
+          'Yangi buyurtma kelganda ovozli bildirishnoma qo‘shing.',
+      'driverIncomingOrders': 'Kelayotgan buyurtmalar',
+      'driverIncomingOrdersDescription':
+          'Yangi buyurtmalarni avtomatik har 1 soniyada olish.',
       'driverMode': 'Haydovchi rejimi',
       'driverModeDescription':
           'Buyurtmalarni qabul qilib, daromad oling. Tasdiqlashdan so‘ng, haydovchilar paneli faollashadi.',
@@ -313,6 +319,12 @@ class AppLocalizations {
       'language': 'Тил',
       'darkMode': 'Тунги режим',
       'darkModeDescription': 'Интерфейсни қоронғи мавзусига ўтказинг',
+      'driverIncomingSound': 'Буюртма сигнали',
+      'driverIncomingSoundDescription':
+          'Янги буюртма келганда овозли хабар берилади.',
+      'driverIncomingOrders': 'Келиб тушган буюртмалар',
+      'driverIncomingOrdersDescription':
+          'Янги буюртмаларни ҳар 1 сонияда автоматик олиш.',
       'driverMode': 'Ҳайдовчи режими',
       'driverModeDescription':
           'Буюртмаларни қабул қилиб даромад олинг. Тасдиқдан сўнг панел фаол бўлади.',
@@ -528,6 +540,12 @@ class AppLocalizations {
       'language': 'Язык',
       'darkMode': 'Тёмная тема',
       'darkModeDescription': 'Переключить интерфейс на тёмный режим',
+      'driverIncomingSound': 'Звук новых заказов',
+      'driverIncomingSoundDescription':
+          'Воспроизводить сигнал при поступлении нового заказа.',
+      'driverIncomingOrders': 'Автообновление заказов',
+      'driverIncomingOrdersDescription':
+          'Получать новые заказы каждые 1 сек. Выключите, чтобы приостановить.',
       'driverMode': 'Режим водителя',
       'driverModeDescription':
           'Принимайте заказы и зарабатывайте. После одобрения откроется панель водителя.',

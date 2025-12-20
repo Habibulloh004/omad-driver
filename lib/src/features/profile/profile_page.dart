@@ -225,12 +225,38 @@ class _ProfilePageState extends State<ProfilePage> {
                   }).toList(),
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                _ThemeToggleTile(
+                _SettingsToggleTile(
                   value: state.themeMode == ThemeMode.dark,
                   title: strings.tr('darkMode'),
                   subtitle: strings.tr('darkModeDescription'),
-                  onChanged: () => context.read<AppState>().toggleTheme(),
+                  icon: Icons.light_mode_rounded,
+                  activeIcon: Icons.dark_mode_rounded,
+                  onChanged: (_) => context.read<AppState>().toggleTheme(),
                 ),
+                if (hasApprovedDriverAccess) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _SettingsToggleTile(
+                    value: state.driverIncomingSoundEnabled,
+                    title: strings.tr('driverIncomingSound'),
+                    subtitle: strings.tr('driverIncomingSoundDescription'),
+                    icon: Icons.volume_off_rounded,
+                    activeIcon: Icons.volume_up_rounded,
+                    onChanged: (enabled) => context
+                        .read<AppState>()
+                        .setDriverIncomingSoundEnabled(enabled),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _SettingsToggleTile(
+                    value: state.driverIncomingOrdersEnabled,
+                    title: strings.tr('driverIncomingOrders'),
+                    subtitle: strings.tr('driverIncomingOrdersDescription'),
+                    icon: Icons.sync_disabled_rounded,
+                    activeIcon: Icons.sync_rounded,
+                    onChanged: (enabled) => context
+                        .read<AppState>()
+                        .setDriverIncomingOrdersEnabled(enabled),
+                  ),
+                ],
               ],
             ),
           ),
@@ -551,24 +577,29 @@ class _ProfileLoginGate extends StatelessWidget {
   }
 }
 
-class _ThemeToggleTile extends StatelessWidget {
-  const _ThemeToggleTile({
+class _SettingsToggleTile extends StatelessWidget {
+  const _SettingsToggleTile({
     required this.value,
     required this.title,
     required this.subtitle,
+    required this.icon,
+    this.activeIcon,
     required this.onChanged,
   });
 
   final bool value;
   final String title;
   final String subtitle;
-  final VoidCallback onChanged;
+  final IconData icon;
+  final IconData? activeIcon;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final baseSurface = theme.colorScheme.surface.withValues(alpha: 0.12);
     final activeSurface = theme.colorScheme.primary.withValues(alpha: 0.18);
+    final leadingIcon = value && activeIcon != null ? activeIcon! : icon;
     return AnimatedContainer(
       duration: AppDurations.medium,
       curve: Curves.easeOutCubic,
@@ -583,7 +614,7 @@ class _ThemeToggleTile extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            value ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+            leadingIcon,
             color: theme.colorScheme.primary,
           ),
           const SizedBox(width: AppSpacing.md),
@@ -602,7 +633,7 @@ class _ThemeToggleTile extends StatelessWidget {
               ],
             ),
           ),
-          Switch.adaptive(value: value, onChanged: (_) => onChanged()),
+          Switch.adaptive(value: value, onChanged: onChanged),
         ],
       ),
     );
