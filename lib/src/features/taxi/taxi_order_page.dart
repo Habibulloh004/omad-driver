@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -37,17 +38,20 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
   DateTime selectedDate = DateTime.now();
   TimeOfDay scheduledTime = TimeOfDay.fromDateTime(DateTime.now());
   bool confirming = false;
+  bool shareExactPickupAddress = true;
   PickupLocation? pickupLocation;
   bool detectingPickup = false;
   final LocationService _locationService = const LocationService();
   final TextEditingController noteCtrl = TextEditingController();
+  final TextEditingController bonusCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     final user = context.read<AppState>().currentUser;
-    clientNameCtrl.text =
-        user.fullName.toLowerCase() == 'unknown' ? '' : user.fullName;
+    clientNameCtrl.text = user.fullName.toLowerCase() == 'unknown'
+        ? ''
+        : user.fullName;
     clientPhoneCtrl.text = user.phoneNumber.trim().startsWith('+')
         ? user.phoneNumber
         : '+998';
@@ -59,6 +63,7 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     clientNameCtrl.dispose();
     clientPhoneCtrl.dispose();
     noteCtrl.dispose();
+    bonusCtrl.dispose();
     super.dispose();
   }
 
@@ -225,6 +230,24 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                             ),
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: shareExactPickupAddress,
+                        visualDensity: const VisualDensity(
+                          horizontal: -4,
+                          vertical: -4,
+                        ),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        onChanged: (value) => setState(
+                          () => shareExactPickupAddress = value ?? true,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(child: Text(strings.tr('shareExactAddress'))),
+                    ],
+                  ),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
@@ -293,9 +316,9 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.md),
                   _SectionTitle(label: strings.tr('scheduledTime')),
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: AppSpacing.xs),
                   Row(
                     children: [
                       Expanded(
@@ -320,13 +343,23 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                 ],
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
             GlassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _SectionTitle(label: strings.tr('bonusUser')),
+                  const SizedBox(height: AppSpacing.xs),
+                  AppTextField(
+                    controller: bonusCtrl,
+                    label: strings.tr('bonusUser'),
+                    hintText: strings.tr('bonusUserHint'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
                   _SectionTitle(label: strings.tr('optionalNote')),
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: AppSpacing.xs),
                   AppTextField(
                     controller: noteCtrl,
                     label: strings.tr('note'),
@@ -563,10 +596,10 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
               if (pickupLocation != null)
                 _SummaryRow(
                   label: dialogStrings.tr('pickupAddress'),
-                  value: pickupLocation!.address.trim().isEmpty
-                      ? '${pickupLocation!.latitude.toStringAsFixed(5)}, '
-                            '${pickupLocation!.longitude.toStringAsFixed(5)}'
-                      : pickupLocation!.address,
+                  value: _pickupSummaryLabel(
+                    dialogStrings,
+                    _pickupLocationForSending(),
+                  ),
                 ),
               _SummaryRow(
                 label: dialogStrings.tr('passengers'),
@@ -619,6 +652,27 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     setState(() => confirming = false);
   }
 
+  PickupLocation _pickupLocationForSending() {
+    if (pickupLocation == null) {
+      throw StateError('pickupLocation is null');
+    }
+    if (shareExactPickupAddress || pickupLocation!.address.trim().isEmpty) {
+      return pickupLocation!;
+    }
+    return pickupLocation!.copyWith(address: '');
+  }
+
+  String _pickupSummaryLabel(
+    AppLocalizations strings,
+    PickupLocation effectivePickup,
+  ) {
+    if (effectivePickup.address.trim().isNotEmpty) {
+      return effectivePickup.address;
+    }
+    return '${effectivePickup.latitude.toStringAsFixed(5)}, '
+        '${effectivePickup.longitude.toStringAsFixed(5)}';
+  }
+
   Future<void> _sendOrder() async {
     final state = context.read<AppState>();
     final strings = context.strings;
@@ -635,6 +689,7 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
       return;
     }
     try {
+      final effectivePickup = _pickupLocationForSending();
       final order = await state.createTaxiOrder(
         fromRegion: fromRegion!,
         fromDistrict: fromDistrict!,
@@ -644,10 +699,11 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
         clientGender: clientGender,
         scheduledDate: selectedDate,
         scheduledTime: scheduledTime,
-        pickupLocation: pickupLocation!,
+        pickupLocation: effectivePickup,
         note: noteCtrl.text,
         customerName: clientNameCtrl.text,
         customerPhone: clientPhoneCtrl.text,
+        bonusUserId: bonusCtrl.text.trim().isEmpty ? null : bonusCtrl.text,
       );
 
       if (!mounted) return;

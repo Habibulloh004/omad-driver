@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/auth_api.dart';
 import '../../core/design_tokens.dart';
@@ -46,13 +48,11 @@ class _ProfilePageState extends State<ProfilePage> {
         : pendingDriverReview
         ? strings.tr('applicationPending')
         : strings.tr('becomeDriver');
-    final VoidCallback? driverButtonAction =
-        _openingDriver
-            ? null
-            : (hasApprovedDriverAccess ||
-                    (!pendingDriverReview && !user.isDriver))
-                ? () => _handleDriverNavigation(context)
-                : null;
+    final VoidCallback? driverButtonAction = _openingDriver
+        ? null
+        : (hasApprovedDriverAccess || (!pendingDriverReview && !user.isDriver))
+        ? () => _handleDriverNavigation(context)
+        : null;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -75,6 +75,22 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               ),
+              IconButton(
+                onPressed: () => _callUserPhone(context, '1829'),
+                icon: const Icon(Icons.phone_rounded),
+                tooltip: '1829',
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              if (user.isDriver || pendingDriverReview) ...[
+                IconButton(
+                  onPressed: _openingDriver
+                      ? null
+                      : () => _handleDriverNavigation(context),
+                  icon: const Icon(Icons.directions_car_filled_rounded),
+                  tooltip: strings.tr('switchToDriver'),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+              ],
               IconButton(
                 onPressed: () => context.read<AppState>().logout(),
                 icon: const Icon(Icons.logout_rounded),
@@ -121,6 +137,28 @@ class _ProfilePageState extends State<ProfilePage> {
                           const SizedBox(height: AppSpacing.xs),
                           Text(
                             '${strings.tr('phoneNumberShort')}: ${user.phoneNumber}',
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${strings.tr('userIdLabel')}: ${user.id}',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              IconButton(
+                                iconSize: 20,
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => _copyUserId(context, user.id),
+                                icon: const Icon(Icons.copy_rounded),
+                                tooltip: strings.tr('copy'),
+                              ),
+                            ],
                           ),
                           if (user.isDriver) ...[
                             const SizedBox(height: AppSpacing.xs),
@@ -303,11 +341,31 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  Future<void> _callUserPhone(BuildContext context, String phone) async {
+    if (phone.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final telUri = Uri(scheme: 'tel', path: phone);
+    try {
+      final launched = await launchUrl(telUri);
+      if (!launched) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(context.strings.tr('unexpectedError'))),
+        );
+      }
+    } catch (_) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.strings.tr('unexpectedError'))),
+      );
+    }
+  }
+
   void _showEditProfile(BuildContext context) {
     final strings = context.strings;
     final state = context.read<AppState>();
     final nameCtrl = TextEditingController(text: state.currentUser.fullName);
-    final phoneCtrl = TextEditingController(text: state.currentUser.phoneNumber);
+    final phoneCtrl = TextEditingController(
+      text: state.currentUser.phoneNumber,
+    );
 
     showModalBottomSheet(
       context: context,
@@ -516,6 +574,13 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _copyUserId(BuildContext context, String userId) async {
+    await Clipboard.setData(ClipboardData(text: userId));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(context.strings.tr('copied'))));
+  }
+
   Future<void> _refreshProfileData(BuildContext context) async {
     if (_refreshingProfile) return;
     setState(() => _refreshingProfile = true);
@@ -627,10 +692,7 @@ class _SettingsToggleTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            leadingIcon,
-            color: theme.colorScheme.primary,
-          ),
+          Icon(leadingIcon, color: theme.colorScheme.primary),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(

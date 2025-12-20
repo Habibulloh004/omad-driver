@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class AppTextField extends StatelessWidget {
   const AppTextField({
@@ -17,6 +18,7 @@ class AppTextField extends StatelessWidget {
     this.hintText,
     this.showLabel = true,
     this.floatingLabelBehavior,
+    this.inputFormatters,
   });
 
   final TextEditingController controller;
@@ -33,6 +35,7 @@ class AppTextField extends StatelessWidget {
   final String? hintText;
   final bool showLabel;
   final FloatingLabelBehavior? floatingLabelBehavior;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -49,13 +52,18 @@ class AppTextField extends StatelessWidget {
       readOnly: readOnly,
       minLines: minLines,
       maxLines: maxLines,
-      textAlignVertical:
-          isMultiline ? TextAlignVertical.top : TextAlignVertical.center,
+      inputFormatters: inputFormatters,
+      textAlignVertical: isMultiline
+          ? TextAlignVertical.top
+          : TextAlignVertical.center,
       decoration: InputDecoration(
         labelText: hasLabel ? label : null,
         hintText: resolvedHint,
-        floatingLabelBehavior: floatingLabelBehavior ??
-            (hasLabel ? FloatingLabelBehavior.auto : FloatingLabelBehavior.never),
+        floatingLabelBehavior:
+            floatingLabelBehavior ??
+            (hasLabel
+                ? FloatingLabelBehavior.auto
+                : FloatingLabelBehavior.never),
         alignLabelWithHint: isMultiline,
         contentPadding: isMultiline
             ? const EdgeInsets.fromLTRB(16, 18, 16, 18)

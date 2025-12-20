@@ -23,11 +23,8 @@ import '../storage/session_storage.dart';
 class AppState extends ChangeNotifier {
   AppState({ApiClient? apiClient, RealtimeGateway? realtime})
     : _api = apiClient ?? ApiClient(),
-      _realtime = realtime ??
-          RealtimeGateway(
-            baseUrl: backendBaseUrl,
-            enabled: false,
-          ) {
+      _realtime =
+          realtime ?? RealtimeGateway(baseUrl: backendBaseUrl, enabled: false) {
     _api.setUnauthorizedHandler(_handleUnauthorizedLogout);
     _realtime.setHandlers(
       onUserEvent: _handleUserRealtimeEvent,
@@ -233,7 +230,8 @@ class AppState extends ChangeNotifier {
 
   String regionLabel(RegionModel region) => _regionDisplayName(region);
   String regionLabelById(int id) => _regionDisplayNameById(id);
-  String districtLabel(DistrictModel district) => _districtDisplayName(district);
+  String districtLabel(DistrictModel district) =>
+      _districtDisplayName(district);
   String districtLabelById(int id) => _districtDisplayNameById(id);
 
   Iterable<AppOrder> _ordersForCurrentUser() sync* {
@@ -265,7 +263,9 @@ class AppState extends ChangeNotifier {
     _driverIncomingOrdersEnabled = enabled;
     await _persistDriverPreferences();
     if (enabled) {
-      if (_isAuthenticated && _currentUser.isDriver && _currentUser.driverApproved) {
+      if (_isAuthenticated &&
+          _currentUser.isDriver &&
+          _currentUser.driverApproved) {
         _startDriverRealtimeTimer();
         unawaited(_pollDriverRealtime());
       }
@@ -520,6 +520,7 @@ class AppState extends ChangeNotifier {
     String? note,
     String? customerName,
     String? customerPhone,
+    String? bonusUserId,
   }) async {
     final fromRegionId = _regionIdByName(fromRegion);
     final toRegionId = _regionIdByName(toRegion);
@@ -543,8 +544,9 @@ class AppState extends ChangeNotifier {
       throw const ApiException('Invalid scheduled time', statusCode: 400);
     }
     final nameInput = (customerName ?? _currentUser.fullName).trim();
-    final username =
-        nameInput.isEmpty ? _currentUser.fullName : nameInput.trim();
+    final username = nameInput.isEmpty
+        ? _currentUser.fullName
+        : nameInput.trim();
     final phoneInput = (customerPhone ?? '').trim();
     final fallbackPhone = _currentUser.phoneNumber;
     final normalizedTelephone = _preparePhoneNumber(
@@ -575,6 +577,8 @@ class AppState extends ChangeNotifier {
       'time_end': "",
       'scheduled_datetime': scheduled.toUtc().toIso8601String(),
       if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      if (bonusUserId != null && bonusUserId.trim().isNotEmpty)
+        'bonus_user_id': bonusUserId.trim(),
     };
 
     final response = await _api.createTaxiOrder(body);
@@ -849,15 +853,17 @@ class AppState extends ChangeNotifier {
   Future<void> updateProfile({String? name, String? phoneNumber}) async {
     final trimmedName = name?.trim();
     final trimmedPhone = phoneNumber?.trim();
-    final currentNormalizedPhone =
-        _normalizePhoneNumber(_currentUser.phoneNumber);
-    final phoneChanged = trimmedPhone != null &&
+    final currentNormalizedPhone = _normalizePhoneNumber(
+      _currentUser.phoneNumber,
+    );
+    final phoneChanged =
+        trimmedPhone != null &&
         trimmedPhone.isNotEmpty &&
         trimmedPhone != _currentUser.phoneNumber;
     final normalizedPhone =
         phoneChanged && trimmedPhone != null && trimmedPhone.isNotEmpty
-            ? _preparePhoneNumber(trimmedPhone)
-            : null;
+        ? _preparePhoneNumber(trimmedPhone)
+        : null;
     final shouldUpdateName =
         trimmedName != null &&
         trimmedName.isNotEmpty &&
@@ -1010,10 +1016,7 @@ class AppState extends ChangeNotifier {
     final carUpload = await _api.uploadDriverCarPhoto(carPhotoFile);
     final carPhotoPath = carUpload['file_path']?.toString() ?? '';
     if (carPhotoPath.isEmpty) {
-      throw const ApiException(
-        'Failed to upload car photo',
-        statusCode: 400,
-      );
+      throw const ApiException('Failed to upload car photo', statusCode: 400);
     }
     final texUpload = await _api.uploadDriverTexPas(texPasFile);
     final texPasPath = texUpload['file_path']?.toString() ?? '';
@@ -1941,24 +1944,28 @@ class AppState extends ChangeNotifier {
           resolveDistrictName: _districtDisplayNameById,
           fallbackType: order.type,
         );
-        updated.add(order.copyWith(
-          serviceFee: mapped.serviceFee,
-          price: mapped.price,
-          priceAvailable: mapped.priceAvailable,
-          note: mapped.note ?? order.note,
-          clientGender: mapped.clientGender,
-          pickupAddress: mapped.pickupAddress ?? order.pickupAddress,
-          pickupLatitude: mapped.pickupLatitude ?? order.pickupLatitude,
-          pickupLongitude: mapped.pickupLongitude ?? order.pickupLongitude,
-          customerPhone: mapped.customerPhone ?? order.customerPhone,
-        ));
+        updated.add(
+          order.copyWith(
+            serviceFee: mapped.serviceFee,
+            price: mapped.price,
+            priceAvailable: mapped.priceAvailable,
+            note: mapped.note ?? order.note,
+            clientGender: mapped.clientGender,
+            pickupAddress: mapped.pickupAddress ?? order.pickupAddress,
+            pickupLatitude: mapped.pickupLatitude ?? order.pickupLatitude,
+            pickupLongitude: mapped.pickupLongitude ?? order.pickupLongitude,
+            customerPhone: mapped.customerPhone ?? order.customerPhone,
+          ),
+        );
       } catch (_) {
         // Ignore individual hydration failures; continue with remaining orders.
       }
     }
     if (updated.isNotEmpty) {
-      _driverAvailableOrders =
-          _mergeDriverOrders(_driverAvailableOrders, updated);
+      _driverAvailableOrders = _mergeDriverOrders(
+        _driverAvailableOrders,
+        updated,
+      );
       _pruneUnaffordableAvailableOrders();
       notifyListeners();
     }
@@ -1983,9 +1990,7 @@ class AppState extends ChangeNotifier {
     try {
       _driverIncomingPlayer ??= AudioPlayer();
       await _driverIncomingPlayer!.stop();
-      await _driverIncomingPlayer!.play(
-        AssetSource('notification.mp3'),
-      );
+      await _driverIncomingPlayer!.play(AssetSource('notification.mp3'));
     } catch (_) {
       // Ignore audio playback failures; polling will continue.
     }
@@ -2981,7 +2986,7 @@ class AppState extends ChangeNotifier {
         _driverCompletedLoadingMore = false;
         _driverStats = null;
         _isDriverMode = false;
-      if (!roleAllowsDriver) {
+        if (!roleAllowsDriver) {
           _driverProfile = null;
         }
       }
@@ -3149,7 +3154,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _pollDriverRealtime() async {
-    if (!_isAuthenticated || !_currentUser.isDriver || !_currentUser.driverApproved) {
+    if (!_isAuthenticated ||
+        !_currentUser.isDriver ||
+        !_currentUser.driverApproved) {
       return;
     }
     if (!_driverIncomingOrdersEnabled) return;
@@ -3227,8 +3234,7 @@ class AppState extends ChangeNotifier {
         completedOrders,
       );
       _driverActiveHasMore = assignedHasMore || _driverActiveHasMore;
-      _driverCompletedHasMore =
-          assignedHasMore || _driverCompletedHasMore;
+      _driverCompletedHasMore = assignedHasMore || _driverCompletedHasMore;
       _recomputeDriverPaginationOffsets();
       _pruneUnaffordableAvailableOrders();
       await _hydrateDriverServiceFees(_driverAvailableOrders);
@@ -3579,8 +3585,7 @@ class AppState extends ChangeNotifier {
     final parsedPrice = hasPrice ? parseDouble(rawPrice) : 0.0;
     final rawServiceFee =
         json['service_fee'] ?? json['serviceFee'] ?? json['service_fee_amount'];
-    var serviceFee =
-        rawServiceFee == null ? 0.0 : parseDouble(rawServiceFee);
+    var serviceFee = rawServiceFee == null ? 0.0 : parseDouble(rawServiceFee);
     if (serviceFee <= 0 && parsedPrice > 0) {
       final driverEarningsRaw = json['driver_earnings'];
       if (driverEarningsRaw != null) {
@@ -3610,7 +3615,8 @@ class AppState extends ChangeNotifier {
       json['confirmed_at']?.toString(),
     );
     final isConfirmed = parseBool(json['is_confirmed']);
-    final rawGender = json['client_gender'] ??
+    final rawGender =
+        json['client_gender'] ??
         json['clientGender'] ??
         json['passenger_gender'] ??
         json['gender'] ??
@@ -3664,16 +3670,20 @@ class AppState extends ChangeNotifier {
   }) {
     final normalizedCurrent = current.trim();
     final normalizedFallback = fallback.trim();
-    final hasMeaningfulCurrent = normalizedCurrent.isNotEmpty &&
+    final hasMeaningfulCurrent =
+        normalizedCurrent.isNotEmpty &&
         (normalizedFallback.isEmpty ||
-            normalizedCurrent.toLowerCase() != normalizedFallback.toLowerCase());
+            normalizedCurrent.toLowerCase() !=
+                normalizedFallback.toLowerCase());
     if (hasMeaningfulCurrent) return normalizedCurrent;
     for (final key in keys) {
       final value = json[key];
       final label = _extractLabel(value);
       if (label != null && label.isNotEmpty) return label;
     }
-    return normalizedCurrent.isNotEmpty ? normalizedCurrent : normalizedFallback;
+    return normalizedCurrent.isNotEmpty
+        ? normalizedCurrent
+        : normalizedFallback;
   }
 
   String? _extractLabel(Object? value) {

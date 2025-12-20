@@ -34,15 +34,9 @@ const List<Color> _driverBalanceGradient = [
   _brandTealDeep,
 ];
 
-const List<Color> _driverStatGradient = [
-  _brandTealBright,
-  _brandTealDeep,
-];
+const List<Color> _driverStatGradient = [_brandTealBright, _brandTealDeep];
 
-const List<Color> _driverStatAltGradient = [
-  _brandTealGlow,
-  _brandTeal,
-];
+const List<Color> _driverStatAltGradient = [_brandTealGlow, _brandTeal];
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
@@ -161,10 +155,14 @@ class _DriverDashboardState extends State<DriverDashboard> {
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: onTint.withValues(alpha: isDark ? 0.12 : 0.1),
+                              color: onTint.withValues(
+                                alpha: isDark ? 0.12 : 0.1,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: colorScheme.primary.withValues(alpha: 0.22),
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.22,
+                                  ),
                                   blurRadius: 16,
                                   offset: const Offset(0, 10),
                                 ),
@@ -192,10 +190,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
                                     symbol: 'so\'m ',
                                     decimalDigits: 0,
                                   ).format(balance),
-                                  style: theme.textTheme.headlineMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: onTint,
-                                  ),
+                                  style: theme.textTheme.headlineMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: onTint,
+                                      ),
                                 ),
                               ],
                             ),
@@ -224,7 +223,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
                                 Text(
                                   strings
                                       .tr('ordersCount')
-                                      .replaceFirst('{count}', todayCount.toString()),
+                                      .replaceFirst(
+                                        '{count}',
+                                        todayCount.toString(),
+                                      ),
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w700,
                                     color: onTint,
@@ -236,10 +238,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
                                     symbol: 'so\'m ',
                                     decimalDigits: 0,
                                   ).format(totalToday),
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    color: onTint,
-                                  ),
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                        color: onTint,
+                                      ),
                                 ),
                               ],
                             ),
@@ -264,7 +267,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
                                 Text(
                                   strings
                                       .tr('ordersCount')
-                                      .replaceFirst('{count}', monthCount.toString()),
+                                      .replaceFirst(
+                                        '{count}',
+                                        monthCount.toString(),
+                                      ),
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w700,
                                     color: onTint,
@@ -276,10 +282,11 @@ class _DriverDashboardState extends State<DriverDashboard> {
                                     symbol: 'so\'m ',
                                     decimalDigits: 0,
                                   ).format(totalMonth),
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    color: onTint,
-                                  ),
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                        color: onTint,
+                                      ),
                                 ),
                               ],
                             ),
@@ -296,7 +303,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
                             label: Text(strings.tr('incomingOrders')),
                             onPressed: () => Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => const DriverIncomingOrdersPage(),
+                                builder: (_) =>
+                                    const DriverIncomingOrdersPage(),
                               ),
                             ),
                           ),
@@ -318,9 +326,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     const SizedBox(height: 32),
                     Text(
                       strings.tr('activeOrders'),
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     if (state.driverActiveOrders.length >= 20 ||
                         state.driverActiveHasMore)
@@ -698,8 +706,9 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
     final theme = Theme.of(context);
     final state = context.read<AppState>();
     final allOptionIds = options.map((r) => r.id).toSet();
-    final tempSelected =
-        selected.isEmpty ? allOptionIds.toSet() : selected.toSet();
+    final tempSelected = selected.isEmpty
+        ? allOptionIds.toSet()
+        : selected.toSet();
     final result = await showModalBottomSheet<Set<int>>(
       context: context,
       isScrollControlled: true,
@@ -764,9 +773,8 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: () => Navigator.of(sheetContext).pop(
-                        tempSelected.toSet(),
-                      ),
+                      onPressed: () =>
+                          Navigator.of(sheetContext).pop(tempSelected.toSet()),
                       child: Text(strings.tr('save')),
                     ),
                   ),
@@ -811,9 +819,12 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
           .whereType<String>()
           .toList();
       if (labels.isEmpty) return '${selected.length}';
-      if (labels.length == 1) return '${labels.first} (+${selected.length - 1})';
-      return '${labels.first}, ${labels[1]}${selected.length > 2 ? ' +' '${selected.length - 2}' : ''}';
+      if (labels.length == 1)
+        return '${labels.first} (+${selected.length - 1})';
+      return '${labels.first}, ${labels[1]}${selected.length > 2 ? ' +'
+                '${selected.length - 2}' : ''}';
     }
+
     return DecoratedBox(
       decoration: _selectShadow(theme),
       child: Material(
@@ -936,8 +947,7 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
                             overflow: TextOverflow.ellipsis,
                             style: _selectValueTextStyle(
                               theme,
-                              placeholder:
-                                  i == 0 && fromRegionFilter == null,
+                              placeholder: i == 0 && fromRegionFilter == null,
                             ),
                           ),
                       ];
@@ -974,30 +984,21 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
                     value: null,
                     child: Text(
                       strings.tr('any'),
-                      style: _selectValueTextStyle(
-                        theme,
-                        placeholder: true,
-                      ),
+                      style: _selectValueTextStyle(theme, placeholder: true),
                     ),
                   ),
                   DropdownMenuItem<OrderType?>(
                     value: OrderType.taxi,
                     child: Text(
                       strings.tr('taxiOrder'),
-                      style: _selectValueTextStyle(
-                        theme,
-                        placeholder: false,
-                      ),
+                      style: _selectValueTextStyle(theme, placeholder: false),
                     ),
                   ),
                   DropdownMenuItem<OrderType?>(
                     value: OrderType.delivery,
                     child: Text(
                       strings.tr('deliveryOrder'),
-                      style: _selectValueTextStyle(
-                        theme,
-                        placeholder: false,
-                      ),
+                      style: _selectValueTextStyle(theme, placeholder: false),
                     ),
                   ),
                 ],
@@ -1138,8 +1139,11 @@ class _PendingOrderTile extends StatelessWidget {
     final passengersLabel = strings
         .tr('passengersCount')
         .replaceFirst('{count}', order.passengers.toString());
-    final genderLabel =
-        _genderLabel(strings, order.clientGender, passengers: order.passengers);
+    final genderLabel = _genderLabel(
+      strings,
+      order.clientGender,
+      passengers: order.passengers,
+    );
     final priceLabel = order.priceAvailable
         ? NumberFormat.currency(
             symbol: 'so\'m ',
@@ -1221,10 +1225,7 @@ class _PendingOrderTile extends StatelessWidget {
                         icon: Icons.group_rounded,
                         label: passengersLabel,
                       ),
-                      _InfoChip(
-                        icon: Icons.wc_rounded,
-                        label: genderLabel,
-                      ),
+                      _InfoChip(icon: Icons.wc_rounded, label: genderLabel),
                       _InfoChip(
                         icon: Icons.payments_rounded,
                         label: priceLabel,
@@ -1844,8 +1845,11 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
               .tr('reservedUntil')
               .replaceFirst('{time}', DateFormat.Hm().format(expiresAt))
         : null;
-    final genderLabel =
-        _genderLabel(strings, order.clientGender, passengers: order.passengers);
+    final genderLabel = _genderLabel(
+      strings,
+      order.clientGender,
+      passengers: order.passengers,
+    );
     final note = order.note?.trim();
     final phone = order.customerPhone?.trim() ?? '';
     final hasPhone = phone.isNotEmpty;
