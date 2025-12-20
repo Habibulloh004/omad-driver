@@ -204,17 +204,21 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final maxWidth = constraints.maxWidth.clamp(360.0, 720.0);
-            return Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.sm,
-                    AppSpacing.lg,
-                    AppSpacing.xl,
-                  ),
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            final contentPadding = EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.xl + bottomInset, // keep form above the on-screen keyboard
+            );
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: contentPadding,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: AppSpacing.xl),
 
@@ -271,115 +275,109 @@ class _AuthFlowState extends State<AuthFlow> with TickerProviderStateMixin {
                       const SizedBox(height: AppSpacing.lg),
 
                       // ---- Card with Forms ----
-                      Expanded(
-                        child: SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
-                          child: _FrostCard(
-                            padding: const EdgeInsets.all(AppSpacing.lg),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Toggle
-                                PillTabs(
-                                  tabs: [
-                                    strings.tr('loginTitle'),
-                                    strings.tr('registerTitle'),
-                                  ],
-                                  current: _currentFormIndex,
-                                  onChanged: (index) {
-                                    if (!loading) _switchForm(index);
-                                  },
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-
-                                AnimatedSize(
-                                  duration: AppDurations.medium,
-                                  curve: Curves.easeInOutCubic,
-                                  alignment: Alignment.topCenter,
-                                  clipBehavior: Clip.none,
-                                  child: AnimatedSwitcher(
-                                    duration: AppDurations.medium,
-                                    layoutBuilder: (currentChild, previous) {
-                                      return Stack(
-                                        clipBehavior: Clip.none,
-                                        alignment: Alignment.topCenter,
-                                        children: [
-                                          ...previous,
-                                          if (currentChild != null)
-                                            currentChild,
-                                        ],
-                                      );
-                                    },
-                                    transitionBuilder: (child, animation) {
-                                      final curved = CurvedAnimation(
-                                        parent: animation,
-                                        curve: Curves.easeInOutCubic,
-                                      );
-                                      final isEntering =
-                                          animation.status !=
-                                          AnimationStatus.reverse;
-                                      final offsetTween = Tween<Offset>(
-                                        begin: isEntering
-                                            ? Offset(0.18 * _slideDirection, 0)
-                                            : Offset.zero,
-                                        end: isEntering
-                                            ? Offset.zero
-                                            : Offset(
-                                                -0.18 * _slideDirection,
-                                                0,
-                                              ),
-                                      );
-                                      final slideAnimation = curved.drive(
-                                        offsetTween,
-                                      );
-                                      return FadeTransition(
-                                        opacity: curved,
-                                        child: SlideTransition(
-                                          position: slideAnimation,
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    child: KeyedSubtree(
-                                      key: ValueKey(_currentFormIndex),
-                                      child: _isLogin
-                                          ? _buildLoginForm(strings, theme)
-                                          : _buildRegisterForm(strings, theme),
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(height: AppSpacing.lg),
-                                Center(
-                                  child: TextButton(
-                                    onPressed: loading ? null : _toggleForm,
-                                    child: RichText(
-                                      text: TextSpan(
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              color: theme.colorScheme.primary,
-                                            ),
-                                        children: [
-                                          TextSpan(
-                                            text: _isLogin
-                                                ? strings.tr('needAccount')
-                                                : strings.tr('haveAccount'),
-                                          ),
-                                          TextSpan(
-                                            text:
-                                                ' ${_isLogin ? strings.tr('registerNow') : strings.tr('loginInstead')}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                      _FrostCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Toggle
+                            PillTabs(
+                              tabs: [
+                                strings.tr('loginTitle'),
+                                strings.tr('registerTitle'),
                               ],
+                              current: _currentFormIndex,
+                              onChanged: (index) {
+                                if (!loading) _switchForm(index);
+                              },
                             ),
-                          ),
+                            const SizedBox(height: AppSpacing.lg),
+
+                            AnimatedSize(
+                              duration: AppDurations.medium,
+                              curve: Curves.easeInOutCubic,
+                              alignment: Alignment.topCenter,
+                              clipBehavior: Clip.none,
+                              child: AnimatedSwitcher(
+                                duration: AppDurations.medium,
+                                layoutBuilder: (currentChild, previous) {
+                                  return Stack(
+                                    clipBehavior: Clip.none,
+                                    alignment: Alignment.topCenter,
+                                    children: [
+                                      ...previous,
+                                      if (currentChild != null) currentChild,
+                                    ],
+                                  );
+                                },
+                                transitionBuilder: (child, animation) {
+                                  final curved = CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeInOutCubic,
+                                  );
+                                  final isEntering =
+                                      animation.status !=
+                                      AnimationStatus.reverse;
+                                  final offsetTween = Tween<Offset>(
+                                    begin: isEntering
+                                        ? Offset(0.18 * _slideDirection, 0)
+                                        : Offset.zero,
+                                    end: isEntering
+                                        ? Offset.zero
+                                        : Offset(
+                                            -0.18 * _slideDirection,
+                                            0,
+                                          ),
+                                  );
+                                  final slideAnimation = curved.drive(
+                                    offsetTween,
+                                  );
+                                  return FadeTransition(
+                                    opacity: curved,
+                                    child: SlideTransition(
+                                      position: slideAnimation,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: KeyedSubtree(
+                                  key: ValueKey(_currentFormIndex),
+                                  child: _isLogin
+                                      ? _buildLoginForm(strings, theme)
+                                      : _buildRegisterForm(strings, theme),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: AppSpacing.lg),
+                            Center(
+                              child: TextButton(
+                                onPressed: loading ? null : _toggleForm,
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: theme.textTheme.bodyMedium
+                                        ?.copyWith(
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                    children: [
+                                      TextSpan(
+                                        text: _isLogin
+                                            ? strings.tr('needAccount')
+                                            : strings.tr('haveAccount'),
+                                      ),
+                                      TextSpan(
+                                        text:
+                                            ' ${_isLogin ? strings.tr('registerNow') : strings.tr('loginInstead')}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
 

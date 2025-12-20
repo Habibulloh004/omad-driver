@@ -839,6 +839,7 @@ class _PendingOrderTile extends StatelessWidget {
             decimalDigits: 0,
           ).format(order.price)
         : strings.tr('priceUnspecified');
+    final routeLabel = _formatOrderRoute(state, order);
 
     return Opacity(
       opacity: disabled ? 0.55 : 1,
@@ -897,7 +898,7 @@ class _PendingOrderTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '${_formatRegionDistrict(order.fromRegion, order.fromDistrict)} → ${_formatRegionDistrict(order.toRegion, order.toDistrict)}',
+                    routeLabel,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -1036,11 +1037,13 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
+    final state = context.watch<AppState>();
     final order = widget.order;
     final confirmed = order.isConfirmed;
     final confirmationInfo = confirmed
         ? strings.tr('orderConfirmed')
         : strings.tr('orderConfirmRequired');
+    final routeLabel = _formatOrderRoute(state, order);
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1049,7 +1052,7 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
             children: [
               Expanded(
                 child: Text(
-                  '${_formatRegionDistrict(order.fromRegion, order.fromDistrict)} → ${_formatRegionDistrict(order.toRegion, order.toDistrict)}',
+                  routeLabel,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -1535,6 +1538,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     final hasPhone = phone.isNotEmpty;
     final canCall =
         hasPhone && (!widget.previewMode || (!_expired && !_holdReleased));
+    final routeLabel = _formatOrderRoute(state, order);
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -1565,7 +1569,7 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${_formatRegionDistrict(order.fromRegion, order.fromDistrict)} → ${_formatRegionDistrict(order.toRegion, order.toDistrict)}',
+                  routeLabel,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1820,6 +1824,29 @@ String _formatRegionDistrict(String region, String district) {
     return regionLabel;
   }
   return '$regionLabel, $districtLabel';
+}
+
+String _formatOrderRoute(AppState state, AppOrder order) {
+  final fromDistrict = _resolveDistrictLabel(
+    state,
+    order.fromDistrict,
+    order.fromDistrictId,
+  );
+  final toDistrict = _resolveDistrictLabel(
+    state,
+    order.toDistrict,
+    order.toDistrictId,
+  );
+  final fromLabel = _formatRegionDistrict(order.fromRegion, fromDistrict);
+  final toLabel = _formatRegionDistrict(order.toRegion, toDistrict);
+  return '$fromLabel → $toLabel';
+}
+
+String _resolveDistrictLabel(AppState state, String district, int districtId) {
+  final trimmed = district.trim();
+  if (trimmed.isNotEmpty) return trimmed;
+  if (districtId <= 0) return '';
+  return state.districtLabelById(districtId);
 }
 
 String _formatTimeOfDay(TimeOfDay time) {

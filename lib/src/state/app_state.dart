@@ -212,6 +212,8 @@ class AppState extends ChangeNotifier {
 
   String regionLabel(RegionModel region) => _regionDisplayName(region);
   String regionLabelById(int id) => _regionDisplayNameById(id);
+  String districtLabel(DistrictModel district) => _districtDisplayName(district);
+  String districtLabelById(int id) => _districtDisplayNameById(id);
 
   Iterable<AppOrder> _ordersForCurrentUser() sync* {
     final currentId = _currentUser.id.trim();
@@ -3068,10 +3070,80 @@ class AppState extends ChangeNotifier {
     final end =
         _parseDriverTime(json['time_end']?.toString()) ??
         const TimeOfDay(hour: 0, minute: 0);
-    final fromRegion = _regionDisplayNameById(fromRegionId);
-    final fromDistrict = _districtDisplayNameById(fromDistrictId);
-    final toRegion = _regionDisplayNameById(toRegionId);
-    final toDistrict = _districtDisplayNameById(toDistrictId);
+    var fromRegion = _regionDisplayNameById(fromRegionId);
+    fromRegion = _preferInlineLocationLabel(
+      json: json,
+      keys: const [
+        'from_region_label',
+        'from_region_name',
+        'from_region',
+        'from_region_title',
+        'from_region_text',
+        'region_from',
+        'region_from_name',
+        'region_from_label',
+      ],
+      current: fromRegion,
+      fallback: _fallbackRegionName(fromRegionId),
+    );
+    var fromDistrict = _districtDisplayNameById(fromDistrictId);
+    fromDistrict = _preferInlineLocationLabel(
+      json: json,
+      keys: const [
+        'from_district_label',
+        'from_district_name',
+        'from_district',
+        'from_district_title',
+        'from_city',
+        'from_city_name',
+        'from_city_label',
+        'pickup_district',
+        'pickup_district_name',
+        'district_from',
+        'district_from_name',
+        'district_from_label',
+        'from_district_text',
+      ],
+      current: fromDistrict,
+      fallback: _fallbackDistrictName(fromDistrictId),
+    );
+    var toRegion = _regionDisplayNameById(toRegionId);
+    toRegion = _preferInlineLocationLabel(
+      json: json,
+      keys: const [
+        'to_region_label',
+        'to_region_name',
+        'to_region',
+        'to_region_title',
+        'to_region_text',
+        'region_to',
+        'region_to_name',
+        'region_to_label',
+      ],
+      current: toRegion,
+      fallback: _fallbackRegionName(toRegionId),
+    );
+    var toDistrict = _districtDisplayNameById(toDistrictId);
+    toDistrict = _preferInlineLocationLabel(
+      json: json,
+      keys: const [
+        'to_district_label',
+        'to_district_name',
+        'to_district',
+        'to_district_title',
+        'to_city',
+        'to_city_name',
+        'to_city_label',
+        'dropoff_district',
+        'dropoff_district_name',
+        'district_to',
+        'district_to_name',
+        'district_to_label',
+        'to_district_text',
+      ],
+      current: toDistrict,
+      fallback: _fallbackDistrictName(toDistrictId),
+    );
     final note = type == OrderType.delivery
         ? json['item_type']?.toString()
         : json['note']?.toString();
@@ -3146,6 +3218,51 @@ class AppState extends ChangeNotifier {
       isConfirmed: isConfirmed,
       confirmedAt: confirmedAt,
     );
+  }
+
+  String _preferInlineLocationLabel({
+    required Map<String, dynamic> json,
+    required List<String> keys,
+    required String current,
+    required String fallback,
+  }) {
+    final normalizedCurrent = current.trim();
+    final normalizedFallback = fallback.trim();
+    final hasMeaningfulCurrent = normalizedCurrent.isNotEmpty &&
+        (normalizedFallback.isEmpty ||
+            normalizedCurrent.toLowerCase() != normalizedFallback.toLowerCase());
+    if (hasMeaningfulCurrent) return normalizedCurrent;
+    for (final key in keys) {
+      final value = json[key];
+      final label = _extractLabel(value);
+      if (label != null && label.isNotEmpty) return label;
+    }
+    return normalizedCurrent.isNotEmpty ? normalizedCurrent : normalizedFallback;
+  }
+
+  String? _extractLabel(Object? value) {
+    if (value == null) return null;
+    if (value is String) return value.trim();
+    if (value is Map) {
+      final map = Map<String, dynamic>.from(value);
+      for (final key in const [
+        'label',
+        'name',
+        'name_uz',
+        'name_ru',
+        'name_uz_lat',
+        'name_uz_cyr',
+        'title',
+        'text',
+        'value',
+      ]) {
+        final nested = map[key];
+        if (nested is String && nested.trim().isNotEmpty) {
+          return nested.trim();
+        }
+      }
+    }
+    return value.toString().trim();
   }
 
   List<AppOrder> _mergeDriverOrders(
