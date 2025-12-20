@@ -76,7 +76,7 @@ class AppState extends ChangeNotifier {
   List<AppOrder> _driverCompletedOrders = <AppOrder>[];
   OrderType? _driverIncomingTypeFilter;
   int? _driverIncomingFromRegionFilter;
-  int? _driverIncomingToRegionFilter;
+  Set<int> _driverIncomingToRegionFilters = <int>{};
   int _driverAvailableOffset = 0;
   int _driverActiveOffset = 0;
   int _driverCompletedOffset = 0;
@@ -165,7 +165,8 @@ class AppState extends ChangeNotifier {
       List<AppOrder>.unmodifiable(_driverCompletedOrders);
   OrderType? get driverIncomingTypeFilter => _driverIncomingTypeFilter;
   int? get driverIncomingFromRegionFilter => _driverIncomingFromRegionFilter;
-  int? get driverIncomingToRegionFilter => _driverIncomingToRegionFilter;
+  Set<int> get driverIncomingToRegionFilters =>
+      Set<int>.unmodifiable(_driverIncomingToRegionFilters);
   List<RegionModel> get regionOptions =>
       List<RegionModel>.unmodifiable(_regions);
   bool get hasMoreOrders => _taxiOrdersHasMore || _deliveryOrdersHasMore;
@@ -512,10 +513,13 @@ class AppState extends ChangeNotifier {
     required String toRegion,
     required String toDistrict,
     required int passengers,
+    required String clientGender,
     required DateTime scheduledDate,
     required TimeOfDay scheduledTime,
     required PickupLocation pickupLocation,
     String? note,
+    String? customerName,
+    String? customerPhone,
   }) async {
     final fromRegionId = _regionIdByName(fromRegion);
     final toRegionId = _regionIdByName(toRegion);
@@ -538,10 +542,26 @@ class AppState extends ChangeNotifier {
     if (scheduled == null) {
       throw const ApiException('Invalid scheduled time', statusCode: 400);
     }
-    final normalizedTelephone = _preparePhoneNumber(_currentUser.phoneNumber);
+    final nameInput = (customerName ?? _currentUser.fullName).trim();
+    final username =
+        nameInput.isEmpty ? _currentUser.fullName : nameInput.trim();
+    final phoneInput = (customerPhone ?? '').trim();
+    final fallbackPhone = _currentUser.phoneNumber;
+    final normalizedTelephone = _preparePhoneNumber(
+      phoneInput.isNotEmpty ? phoneInput : fallbackPhone,
+    );
+    final normalizedGender = switch (clientGender.toLowerCase().trim()) {
+      'male' => 'male',
+      'female' => 'female',
+      _ => 'both',
+    };
     final body = <String, dynamic>{
-      'username': _currentUser.fullName,
+      'username': username,
       'telephone': normalizedTelephone.toString(),
+      'client_gender': normalizedGender,
+      // Send common aliases to stay backward-compatible with backend expectations.
+      'passenger_gender': normalizedGender,
+      'gender': normalizedGender,
       'from_region_id': fromRegionId,
       'from_district_id': fromDistrictId,
       'to_region_id': toRegionId,
@@ -558,12 +578,15 @@ class AppState extends ChangeNotifier {
     };
 
     final response = await _api.createTaxiOrder(body);
-    final order = AppOrder.fromJson(
+    var order = AppOrder.fromJson(
       response,
       resolveRegionName: _regionDisplayNameById,
       resolveDistrictName: _districtDisplayNameById,
       fallbackType: OrderType.taxi,
     );
+    if (order.clientGender == null || order.clientGender!.isEmpty) {
+      order = order.copyWith(clientGender: normalizedGender);
+    }
     _orders = [order, ..._orders];
     _recomputeUserOrderOffsets();
     notifyListeners();
@@ -799,6 +822,9 @@ class AppState extends ChangeNotifier {
     required int toRegionId,
     required String serviceType,
     int? passengers,
+    int? fromDistrictId,
+    int? toDistrictId,
+    String? seatType,
   }) async {
     try {
       final response = await _api.calculatePrice(
@@ -806,6 +832,9 @@ class AppState extends ChangeNotifier {
         toRegionId: toRegionId,
         serviceType: serviceType,
         passengers: passengers,
+        fromDistrictId: fromDistrictId,
+        toDistrictId: toDistrictId,
+        seatType: seatType,
       );
       final totalPrice = response['total_price'];
       if (totalPrice == null) return null;
@@ -817,17 +846,54 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> updateProfile({String? name}) async {
+  Future<void> updateProfile({String? name, String? phoneNumber}) async {
     final trimmedName = name?.trim();
+    final trimmedPhone = phoneNumber?.trim();
+    final currentNormalizedPhone =
+        _normalizePhoneNumber(_currentUser.phoneNumber);
+    final phoneChanged = trimmedPhone != null &&
+        trimmedPhone.isNotEmpty &&
+        trimmedPhone != _currentUser.phoneNumber;
+    final normalizedPhone =
+        phoneChanged && trimmedPhone != null && trimmedPhone.isNotEmpty
+            ? _preparePhoneNumber(trimmedPhone)
+            : null;
     final shouldUpdateName =
         trimmedName != null &&
         trimmedName.isNotEmpty &&
         trimmedName != _currentUser.fullName;
 
-    if (shouldUpdateName) {
-      await _api.updateProfile(name: trimmedName);
-      _currentUser = _currentUser.copyWith(fullName: trimmedName);
+    final shouldUpdatePhone =
+        normalizedPhone != null && normalizedPhone != currentNormalizedPhone;
+
+    if (!shouldUpdateName && !shouldUpdatePhone) {
+      return;
     }
+
+    final updatedUser = await _api.updateProfile(
+      name: shouldUpdateName ? trimmedName : null,
+      phoneNumber: shouldUpdatePhone ? normalizedPhone : null,
+    );
+    final hydrated = _hydrateUser(updatedUser);
+    _currentUser = _currentUser.copyWith(
+      fullName: hydrated.fullName.isNotEmpty
+          ? hydrated.fullName
+          : _currentUser.fullName,
+      phoneNumber: hydrated.phoneNumber.isNotEmpty
+          ? hydrated.phoneNumber
+          : _currentUser.phoneNumber,
+      avatarUrl: hydrated.avatarUrl.isNotEmpty
+          ? hydrated.avatarUrl
+          : _currentUser.avatarUrl,
+      language: hydrated.language.isNotEmpty
+          ? hydrated.language
+          : _currentUser.language,
+      role: hydrated.role.isNotEmpty ? hydrated.role : _currentUser.role,
+      isDriver: hydrated.isDriver,
+      driverApproved: hydrated.driverApproved,
+      rating: hydrated.rating,
+      balance: hydrated.balance,
+    );
 
     await _saveSessionSnapshot();
     notifyListeners();
@@ -1080,16 +1146,22 @@ class AppState extends ChangeNotifier {
   Future<void> updateDriverIncomingFilters({
     OrderType? orderType,
     int? fromRegionId,
-    int? toRegionId,
+    Set<int>? toRegionIds,
   }) async {
+    final normalizedToRegions = <int>{
+      ...toRegionIds ?? _driverIncomingToRegionFilters,
+    }..removeWhere((id) => id <= 0);
+    if (fromRegionId != null) {
+      normalizedToRegions.remove(fromRegionId);
+    }
     final hasChanged =
         orderType != _driverIncomingTypeFilter ||
         fromRegionId != _driverIncomingFromRegionFilter ||
-        toRegionId != _driverIncomingToRegionFilter;
+        !_setEqualsInt(normalizedToRegions, _driverIncomingToRegionFilters);
     if (!hasChanged) return;
     _driverIncomingTypeFilter = orderType;
     _driverIncomingFromRegionFilter = fromRegionId;
-    _driverIncomingToRegionFilter = toRegionId;
+    _driverIncomingToRegionFilters = normalizedToRegions;
     _driverAvailableOrders = <AppOrder>[];
     _driverAvailableHasMore = true;
     _driverAvailableOffset = 0;
@@ -1119,7 +1191,7 @@ class AppState extends ChangeNotifier {
           limit: _driverOrdersPageSize,
           orderType: _driverIncomingTypeFilter,
           fromRegionId: _driverIncomingFromRegionFilter,
-          toRegionId: _driverIncomingToRegionFilter,
+          toRegionIds: _driverIncomingToRegionFilters,
         ),
         _loadDriverActiveOrders(offset: 0, limit: _driverOrdersPageSize),
       ]);
@@ -1164,7 +1236,7 @@ class AppState extends ChangeNotifier {
         limit: _driverOrdersPageSize,
         orderType: _driverIncomingTypeFilter,
         fromRegionId: _driverIncomingFromRegionFilter,
-        toRegionId: _driverIncomingToRegionFilter,
+        toRegionIds: _driverIncomingToRegionFilters,
       );
       if (page.orders.isNotEmpty) {
         _driverAvailableOrders = _mergeDriverOrders(
@@ -1792,6 +1864,15 @@ class AppState extends ChangeNotifier {
     _enqueueUserRealtimeMessage(title: title, message: message);
   }
 
+  bool _setEqualsInt(Set<int> a, Set<int> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (final value in a) {
+      if (!b.contains(value)) return false;
+    }
+    return true;
+  }
+
   bool _matchesDriverIncomingFilters(AppOrder order) {
     final typeFilter = _driverIncomingTypeFilter;
     if (typeFilter != null && order.type != typeFilter) {
@@ -1801,8 +1882,8 @@ class AppState extends ChangeNotifier {
     if (fromFilter != null && order.fromRegionId != fromFilter) {
       return false;
     }
-    final toFilter = _driverIncomingToRegionFilter;
-    if (toFilter != null && order.toRegionId != toFilter) {
+    final toFilters = _driverIncomingToRegionFilters;
+    if (toFilters.isNotEmpty && !toFilters.contains(order.toRegionId)) {
       return false;
     }
     return true;
@@ -1865,6 +1946,7 @@ class AppState extends ChangeNotifier {
           price: mapped.price,
           priceAvailable: mapped.priceAvailable,
           note: mapped.note ?? order.note,
+          clientGender: mapped.clientGender,
           pickupAddress: mapped.pickupAddress ?? order.pickupAddress,
           pickupLatitude: mapped.pickupLatitude ?? order.pickupLatitude,
           pickupLongitude: mapped.pickupLongitude ?? order.pickupLongitude,
@@ -2089,7 +2171,7 @@ class AppState extends ChangeNotifier {
         limit: _driverOrdersPageSize,
         orderType: _driverIncomingTypeFilter,
         fromRegionId: _driverIncomingFromRegionFilter,
-        toRegionId: _driverIncomingToRegionFilter,
+        toRegionIds: _driverIncomingToRegionFilters,
       );
       _driverAvailableOrders = pending.orders;
       _driverAvailableHasMore = pending.hasMore;
@@ -2383,6 +2465,7 @@ class AppState extends ChangeNotifier {
         vehicle: updated.vehicle ?? order.vehicle,
         vehiclePlate: updated.vehiclePlate ?? order.vehiclePlate,
         driverId: updated.driverId ?? order.driverId,
+        clientGender: updated.clientGender ?? order.clientGender,
         note: updated.note ?? order.note,
         price: updated.price,
         scheduledAt: updated.scheduledAt ?? order.scheduledAt,
@@ -3089,7 +3172,7 @@ class AppState extends ChangeNotifier {
         limit: _driverRealtimePollLimit,
         orderType: _driverIncomingTypeFilter,
         fromRegionId: _driverIncomingFromRegionFilter,
-        toRegionId: _driverIncomingToRegionFilter,
+        toRegionIds: _driverIncomingToRegionFilters,
       );
       final assignedFuture = _api.fetchDriverAssignedOrders(
         limit: _driverRealtimePollLimit,
@@ -3187,7 +3270,7 @@ class AppState extends ChangeNotifier {
     int limit = _driverOrdersPageSize,
     OrderType? orderType,
     int? fromRegionId,
-    int? toRegionId,
+    Set<int>? toRegionIds,
   }) async {
     // Backend now exposes available orders via the active endpoint
     // so new/pending orders are fetched from `/driver/orders/active`.
@@ -3196,7 +3279,7 @@ class AppState extends ChangeNotifier {
       offset: offset,
       orderType: orderType,
       fromRegionId: fromRegionId,
-      toRegionId: toRegionId,
+      toRegionIds: toRegionIds?.toList(growable: false),
     );
     final orders = _mapDriverNewOrders(response);
     return _PaginatedDriverOrders(
@@ -3387,6 +3470,20 @@ class AppState extends ChangeNotifier {
           normalized == 'ha';
     }
 
+    String? parseGender(Object? value) {
+      final normalized = value?.toString().trim().toLowerCase() ?? '';
+      switch (normalized) {
+        case 'male':
+          return 'male';
+        case 'female':
+          return 'female';
+        case 'both':
+          return 'both';
+        default:
+          return null;
+      }
+    }
+
     final fromRegionId = parseInt(json['from_region_id']);
     final fromDistrictId = parseInt(json['from_district_id']);
     final toRegionId = parseInt(json['to_region_id']);
@@ -3513,6 +3610,15 @@ class AppState extends ChangeNotifier {
       json['confirmed_at']?.toString(),
     );
     final isConfirmed = parseBool(json['is_confirmed']);
+    final rawGender = json['client_gender'] ??
+        json['clientGender'] ??
+        json['passenger_gender'] ??
+        json['gender'] ??
+        json['gender_preference'] ??
+        json['genderPreference'] ??
+        json['passenger_gender_preference'] ??
+        json['passengerGenderPreference'];
+    final clientGender = parseGender(rawGender) ?? 'both';
 
     final parsedStatus = usePayloadStatus
         ? (_orderStatusFromValue(json['status']) ??
@@ -3544,6 +3650,7 @@ class AppState extends ChangeNotifier {
       note: note,
       customerName: customerName,
       customerPhone: customerPhone,
+      clientGender: clientGender,
       isConfirmed: isConfirmed,
       confirmedAt: confirmedAt,
     );

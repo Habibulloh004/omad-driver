@@ -307,6 +307,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final strings = context.strings;
     final state = context.read<AppState>();
     final nameCtrl = TextEditingController(text: state.currentUser.fullName);
+    final phoneCtrl = TextEditingController(text: state.currentUser.phoneNumber);
 
     showModalBottomSheet(
       context: context,
@@ -333,15 +334,28 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: nameCtrl,
+                  textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     labelText: strings.tr('fullName'),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    labelText: strings.tr('phoneNumber'),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 GradientButton(
                   onPressed: () async {
                     try {
-                      await state.updateProfile(name: nameCtrl.text);
+                      await state.updateProfile(
+                        name: nameCtrl.text,
+                        phoneNumber: phoneCtrl.text,
+                      );
                       if (!context.mounted) return;
                       Navigator.pop(context);
                     } on ApiException catch (error) {

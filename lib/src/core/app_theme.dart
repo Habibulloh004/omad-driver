@@ -3,21 +3,21 @@ import 'package:flutter/services.dart';
 
 import 'design_tokens.dart';
 
-const _lightSurface = Color(0xFFFFFFFF);
-const _lightSurfaceLow = Color(0xFFF1F3FB);
-const _lightSurfaceHigh = Color(0xFFE9ECF7);
+const _lightSurface = Color(0xFFF5FBFA);
+const _lightSurfaceLow = Color(0xFFE7F3F0);
+const _lightSurfaceHigh = Color(0xFFD9EDEA);
 
-const _darkSurface = Color(0xFF131C30);
-const _darkSurfaceLow = Color(0xFF172135);
-const _darkSurfaceHigh = Color(0xFF1D2942);
+const _darkSurface = Color(0xFF0C1614);
+const _darkSurfaceLow = Color(0xFF10201E);
+const _darkSurfaceHigh = Color(0xFF182E2A);
 
-const _primarySeed = Color(0xFF675BFF);
-const _secondarySeed = Color(0xFF8B82FF);
-const _tertiarySeed = Color(0xFFB7AEFF);
-const _lightOutline = Color(0xFFD9DEF2);
-const _lightOutlineVariant = Color(0xFFE7EBFA);
-const _darkOutline = Color(0xFF273349);
-const _darkOutlineVariant = Color(0xFF303D56);
+const _primarySeed = Color(0xFF029688);
+const _secondarySeed = Color(0xFF12B8A6);
+const _tertiarySeed = Color(0xFF46DCCB);
+const _lightOutline = Color(0xFFC5E4DD);
+const _lightOutlineVariant = Color(0xFFD9EEE9);
+const _darkOutline = Color(0xFF1F3D39);
+const _darkOutlineVariant = Color(0xFF264742);
 const _fontFamily = 'Urbanist';
 const _fontFamilyFallback = ['NotoSans'];
 
@@ -82,22 +82,22 @@ ThemeData buildLightTheme(TextTheme baseTextTheme) {
     surfaceContainer: _lightSurfaceHigh,
     surfaceContainerHigh: _lightSurfaceHigh,
     surfaceContainerHighest: _lightSurfaceHigh,
-    onSurface: const Color(0xFF111827),
-    onSurfaceVariant: const Color(0xFF5D6583),
+    onSurface: const Color(0xFF0F231F),
+    onSurfaceVariant: const Color(0xFF4E6762),
     outline: _lightOutline,
     outlineVariant: _lightOutlineVariant,
     primary: _primarySeed,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFFE6E4FF),
-    onPrimaryContainer: const Color(0xFF1D1866),
+    primaryContainer: const Color(0xFFBDEDE5),
+    onPrimaryContainer: const Color(0xFF04342E),
     secondary: _secondarySeed,
     onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFFE2E0FF),
-    onSecondaryContainer: const Color(0xFF221D5E),
+    secondaryContainer: const Color(0xFFCEF4ED),
+    onSecondaryContainer: const Color(0xFF0A2E2A),
     tertiary: _tertiarySeed,
     onTertiary: Colors.white,
-    tertiaryContainer: const Color(0xFFF1EEFF),
-    onTertiaryContainer: const Color(0xFF231952),
+    tertiaryContainer: const Color(0xFFDAFBF4),
+    onTertiaryContainer: const Color(0xFF0C2F2A),
     surfaceTint: _primarySeed,
     error: const Color(0xFFDC2626),
     onError: Colors.white,
@@ -125,23 +125,23 @@ ThemeData buildDarkTheme(TextTheme baseTextTheme) {
     surfaceContainer: _darkSurfaceLow,
     surfaceContainerHigh: _darkSurfaceHigh,
     surfaceContainerHighest: _darkSurfaceHigh,
-    onSurface: const Color(0xFFE5EBFF),
-    onSurfaceVariant: const Color(0xFFA6B3D8),
+    onSurface: const Color(0xFFDDF6F1),
+    onSurfaceVariant: const Color(0xFFA2D8CF),
     outline: _darkOutline,
     outlineVariant: _darkOutlineVariant,
-    primary: const Color(0xFF9188FF),
-    onPrimary: Colors.white,
-    primaryContainer: const Color(0xFF2C3453),
-    onPrimaryContainer: const Color(0xFFE2E5FF),
-    secondary: const Color(0xFF847CFF),
-    onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFF343C5F),
-    onSecondaryContainer: const Color(0xFFDFE2FF),
-    tertiary: const Color(0xFFB8B1FF),
-    onTertiary: Colors.white,
-    tertiaryContainer: const Color(0xFF3A4366),
-    onTertiaryContainer: const Color(0xFFEAE9FF),
-    surfaceTint: const Color(0xFF9188FF),
+    primary: const Color(0xFF53D6C7),
+    onPrimary: const Color(0xFF04201B),
+    primaryContainer: const Color(0xFF0F3A35),
+    onPrimaryContainer: const Color(0xFFA1F1E4),
+    secondary: const Color(0xFF4AD1C0),
+    onSecondary: const Color(0xFF04201B),
+    secondaryContainer: const Color(0xFF0F3F38),
+    onSecondaryContainer: const Color(0xFFA6F4E8),
+    tertiary: const Color(0xFF7CE8DC),
+    onTertiary: const Color(0xFF07201C),
+    tertiaryContainer: const Color(0xFF144740),
+    onTertiaryContainer: const Color(0xFFC5FFF4),
+    surfaceTint: const Color(0xFF53D6C7),
     error: const Color(0xFFFF6B6B),
     onError: const Color(0xFF160404),
   );

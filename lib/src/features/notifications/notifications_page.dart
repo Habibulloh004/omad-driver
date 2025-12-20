@@ -35,9 +35,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
       appBar: AppBar(
         title: Text(strings.tr('notifications')),
         actions: [
-          TextButton(
+          IconButton(
+            tooltip: strings.tr('markAllRead'),
             onPressed: () => context.read<AppState>().markNotificationsRead(),
-            child: Text(strings.tr('markAllRead')),
+            icon: const Icon(Icons.done_all_rounded),
           ),
         ],
       ),

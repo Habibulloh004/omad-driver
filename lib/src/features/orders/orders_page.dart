@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../api/auth_api.dart';
 import '../../core/design_tokens.dart';
+import '../../localization/app_localizations.dart';
 import '../../localization/localization_ext.dart';
 import '../../models/order.dart';
 import '../../state/app_state.dart';
@@ -926,6 +927,8 @@ class _OrderCard extends StatelessWidget {
       OrderStatus.completed => const Color(0xFF10B981),
       OrderStatus.cancelled => const Color(0xFFEF4444),
     };
+    final genderLabel =
+        _genderLabel(strings, order.clientGender, passengers: order.passengers);
 
     return GlassCard(
       onTap: onTap,
@@ -992,6 +995,10 @@ class _OrderCard extends StatelessWidget {
                     _MetaField(
                       icon: Icons.people_alt_rounded,
                       label: '${order.passengers}',
+                    ),
+                    _MetaField(
+                      icon: Icons.wc_rounded,
+                      label: genderLabel,
                     ),
                   ],
                 ),
@@ -1144,5 +1151,23 @@ class _DetailTile extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+String _genderLabel(
+  AppLocalizations strings,
+  String? raw, {
+  required int passengers,
+}) {
+  final normalized = raw?.toLowerCase().trim();
+  switch (normalized) {
+    case 'male':
+      return strings.tr('genderMale');
+    case 'female':
+      return strings.tr('genderFemale');
+    case 'both':
+      return strings.tr('genderBoth');
+    default:
+      return strings.tr('genderBoth');
   }
 }

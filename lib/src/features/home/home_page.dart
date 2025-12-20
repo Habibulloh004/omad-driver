@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../api/auth_api.dart';
 import '../../core/design_tokens.dart';
+import '../../localization/app_localizations.dart';
 import '../../localization/localization_ext.dart';
 import '../../models/order.dart';
 import '../../state/app_state.dart';
@@ -695,6 +696,24 @@ class _ActiveOrdersPagerButton extends StatelessWidget {
   }
 }
 
+String _genderLabel(
+  AppLocalizations strings,
+  String? raw, {
+  required int passengers,
+}) {
+  final normalized = raw?.toLowerCase().trim();
+  switch (normalized) {
+    case 'male':
+      return strings.tr('genderMale');
+    case 'female':
+      return strings.tr('genderFemale');
+    case 'both':
+      return strings.tr('genderBoth');
+    default:
+      return strings.tr('genderBoth');
+  }
+}
+
 class _OrderHighlightCard extends StatelessWidget {
   const _OrderHighlightCard({required this.order, required this.width});
 
@@ -706,6 +725,8 @@ class _OrderHighlightCard extends StatelessWidget {
     final strings = context.strings;
     final theme = Theme.of(context);
     final dateFormatter = DateFormat('dd MMM, HH:mm');
+    final genderLabel =
+        _genderLabel(strings, order.clientGender, passengers: order.passengers);
 
     return SizedBox(
       width: width,
@@ -803,6 +824,10 @@ class _OrderHighlightCard extends StatelessWidget {
                 _MetaInfo(
                   icon: Icons.people_alt_rounded,
                   value: '${order.passengers}',
+                ),
+                _MetaInfo(
+                  icon: Icons.wc_rounded,
+                  value: genderLabel,
                 ),
               ],
             ),

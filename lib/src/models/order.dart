@@ -38,6 +38,7 @@ class AppOrder {
     this.driverEndTime,
     this.customerName,
     this.customerPhone,
+    this.clientGender,
     this.isConfirmed = false,
     this.confirmedAt,
     this.pickupLatitude,
@@ -145,6 +146,16 @@ class AppOrder {
             ? (json['sender_telephone'] ?? json['receiver_telephone'])
                   ?.toString()
             : null);
+    final rawGender = (json['client_gender'] ??
+            json['clientGender'] ??
+            json['passenger_gender'] ??
+            json['gender'] ??
+            json['gender_preference'] ??
+            json['genderPreference'] ??
+            json['passenger_gender_preference'] ??
+            json['passengerGenderPreference'])
+        ?.toString();
+    final clientGender = _normalizeGender(rawGender) ?? 'both';
     final confirmedAtRaw = json['confirmed_at'] ?? json['confirmation_time'];
     final confirmedAt = confirmedAtRaw == null
         ? null
@@ -198,6 +209,7 @@ class AppOrder {
       driverEndTime: actualEndTime,
       customerName: customerName,
       customerPhone: customerPhone,
+      clientGender: clientGender,
       isConfirmed: isConfirmed,
       confirmedAt: confirmedAt,
       pickupLatitude: pickupLatitude,
@@ -239,6 +251,7 @@ class AppOrder {
   final TimeOfDay? driverEndTime;
   final String? customerName;
   final String? customerPhone;
+  final String? clientGender;
   final bool isConfirmed;
   final DateTime? confirmedAt;
   final double? pickupLatitude;
@@ -267,6 +280,7 @@ class AppOrder {
     DateTime? createdAt,
     String? customerName,
     String? customerPhone,
+    String? clientGender,
     bool? isConfirmed,
     DateTime? confirmedAt,
     double? pickupLatitude,
@@ -306,6 +320,7 @@ class AppOrder {
       driverEndTime: driverEndTime ?? this.driverEndTime,
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
+      clientGender: clientGender ?? this.clientGender,
       isConfirmed: isConfirmed ?? this.isConfirmed,
       confirmedAt: confirmedAt ?? this.confirmedAt,
       pickupLatitude: pickupLatitude ?? this.pickupLatitude,
@@ -351,6 +366,7 @@ class AppOrder {
       driverEndTime: driverEndTime,
       customerName: customerName,
       customerPhone: customerPhone,
+      clientGender: clientGender,
       isConfirmed: isConfirmed,
       confirmedAt: confirmedAt,
       pickupLatitude: pickupLatitude,
@@ -417,6 +433,16 @@ TimeOfDay? _parseTime(String value) {
 String _fallbackRegionName(int id) => id == 0 ? '' : 'Region $id';
 
 String _fallbackDistrictName(int id) => id == 0 ? '' : 'District $id';
+
+String? _normalizeGender(String? value) {
+  final normalized = value?.toLowerCase().trim() ?? '';
+  return switch (normalized) {
+    'male' => 'male',
+    'female' => 'female',
+    'both' => 'both',
+    _ => null,
+  };
+}
 
 int _toInt(Object? value) {
   if (value is int) return value;

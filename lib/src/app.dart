@@ -39,11 +39,11 @@ class MobileTaxiApp extends StatelessWidget {
               GlobalCupertinoLocalizations.delegate,
             ],
             builder: (context, child) {
-              const gradientStops = [0.0, 0.5, 1.0];
+              const gradientStops = [0.0, 0.55, 1.0];
               const gradientColors = [
-                Color(0xFF6E41FF),
-                Color(0xFF8B62FF),
-                Color(0xFFCEB7FF),
+                Color(0xFF016B61),
+                Color(0xFF029688),
+                Color(0xFF55E5D3),
               ];
               return DecoratedBox(
                 decoration: const BoxDecoration(

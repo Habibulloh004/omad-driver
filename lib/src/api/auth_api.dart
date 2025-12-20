@@ -100,10 +100,15 @@ class ApiClient {
     return AppUser.fromJson(_ensureMap(response));
   }
 
-  Future<AppUser> updateProfile({String? name, String? language}) async {
+  Future<AppUser> updateProfile({
+    String? name,
+    String? language,
+    String? phoneNumber,
+  }) async {
     final body = <String, dynamic>{};
     if (name != null) body['name'] = name;
     if (language != null) body['language'] = language;
+    if (phoneNumber != null) body['telephone'] = phoneNumber;
     if (body.isEmpty) {
       throw const ApiException('Nothing to update', statusCode: 400);
     }
@@ -171,6 +176,9 @@ class ApiClient {
     required int toRegionId,
     required String serviceType,
     int? passengers,
+    int? fromDistrictId,
+    int? toDistrictId,
+    String? seatType,
   }) async {
     final query = <String, dynamic>{
       'from_region_id': fromRegionId,
@@ -179,6 +187,16 @@ class ApiClient {
     };
     if (passengers != null) {
       query['passengers'] = passengers;
+    }
+    if (fromDistrictId != null) {
+      query['from_district_id'] = fromDistrictId;
+    }
+    if (toDistrictId != null) {
+      query['to_district_id'] = toDistrictId;
+    }
+    final normalizedSeatType = seatType?.trim();
+    if (normalizedSeatType != null && normalizedSeatType.isNotEmpty) {
+      query['seat_type'] = normalizedSeatType;
     }
     final response = await _request(
       'GET',
@@ -418,6 +436,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchDriverNewOrders({
     int? fromRegionId,
     int? toRegionId,
+    List<int>? toRegionIds,
     int? regionId,
     OrderType? orderType,
     int? limit,
@@ -427,7 +446,11 @@ class ApiClient {
     if (fromRegionId != null) {
       query['from_region_id'] = fromRegionId;
     }
-    if (toRegionId != null) {
+    final normalizedToIds =
+        toRegionIds?.where((id) => id > 0).toList(growable: false);
+    if (normalizedToIds != null && normalizedToIds.isNotEmpty) {
+      query['to_region_ids'] = normalizedToIds.join(',');
+    } else if (toRegionId != null) {
       query['to_region_id'] = toRegionId;
     }
     if (regionId != null) {
@@ -450,6 +473,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchDriverActiveOrders({
     int? fromRegionId,
     int? toRegionId,
+    List<int>? toRegionIds,
     int? regionId,
     OrderType? orderType,
     int? limit,
@@ -459,7 +483,11 @@ class ApiClient {
     if (fromRegionId != null) {
       query['from_region_id'] = fromRegionId;
     }
-    if (toRegionId != null) {
+    final normalizedToIds =
+        toRegionIds?.where((id) => id > 0).toList(growable: false);
+    if (normalizedToIds != null && normalizedToIds.isNotEmpty) {
+      query['to_region_ids'] = normalizedToIds.join(',');
+    } else if (toRegionId != null) {
       query['to_region_id'] = toRegionId;
     }
     if (regionId != null) {

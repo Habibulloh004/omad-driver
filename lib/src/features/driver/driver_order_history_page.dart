@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/design_tokens.dart';
+import '../../localization/app_localizations.dart';
 import '../../localization/localization_ext.dart';
 import '../../models/order.dart';
 import '../../state/app_state.dart';
@@ -193,6 +194,8 @@ class _HistoryOrderCard extends StatelessWidget {
     final passengersLabel = strings
         .tr('passengersCount')
         .replaceFirst('{count}', order.passengers.toString());
+    final genderLabel =
+        _genderLabel(strings, order.clientGender, passengers: order.passengers);
     final priceLabel = order.priceAvailable
         ? NumberFormat.currency(
             symbol: 'so\'m ',
@@ -264,6 +267,7 @@ class _HistoryOrderCard extends StatelessWidget {
               if (timeLabel != null)
                 _MetaPill(icon: Icons.schedule_rounded, label: timeLabel),
               _MetaPill(icon: Icons.group_rounded, label: passengersLabel),
+              _MetaPill(icon: Icons.wc_rounded, label: genderLabel),
               _MetaPill(icon: Icons.payments_rounded, label: priceLabel),
             ],
           ),
@@ -291,6 +295,8 @@ class _HistoryOrderDetailSheet extends StatelessWidget {
     final passengersLabel = strings
         .tr('passengersCount')
         .replaceFirst('{count}', order.passengers.toString());
+    final genderLabel =
+        _genderLabel(strings, order.clientGender, passengers: order.passengers);
     final dateLabel = DateFormat.yMMMMd().format(order.date);
     final timeLabel = _formatTimeRange(order);
     final note = order.note?.trim();
@@ -385,6 +391,12 @@ class _HistoryOrderDetailSheet extends StatelessWidget {
                   icon: Icons.people_alt_rounded,
                   label: strings.tr('passengers'),
                   value: passengersLabel,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _DetailRow(
+                  icon: Icons.wc_rounded,
+                  label: strings.tr('passengerGender'),
+                  value: genderLabel,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _DetailRow(
@@ -557,4 +569,22 @@ String _formatTimeOfDay(TimeOfDay time) {
   final hour = time.hour.toString().padLeft(2, '0');
   final minute = time.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+String _genderLabel(
+  AppLocalizations strings,
+  String? raw, {
+  required int passengers,
+}) {
+  final normalized = raw?.toLowerCase().trim();
+  switch (normalized) {
+    case 'male':
+      return strings.tr('genderMale');
+    case 'female':
+      return strings.tr('genderFemale');
+    case 'both':
+      return strings.tr('genderBoth');
+    default:
+      return strings.tr('genderBoth');
+  }
 }

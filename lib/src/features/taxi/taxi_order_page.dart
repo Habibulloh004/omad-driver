@@ -26,11 +26,14 @@ class TaxiOrderPage extends StatefulWidget {
 }
 
 class _TaxiOrderPageState extends State<TaxiOrderPage> {
+  final TextEditingController clientNameCtrl = TextEditingController();
+  final TextEditingController clientPhoneCtrl = TextEditingController();
   String? fromRegion;
   String? fromDistrict;
   String? toRegion;
   String? toDistrict;
   int passengers = 1;
+  String clientGender = 'male';
   DateTime selectedDate = DateTime.now();
   TimeOfDay scheduledTime = TimeOfDay.fromDateTime(DateTime.now());
   bool confirming = false;
@@ -42,11 +45,19 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
   @override
   void initState() {
     super.initState();
+    final user = context.read<AppState>().currentUser;
+    clientNameCtrl.text =
+        user.fullName.toLowerCase() == 'unknown' ? '' : user.fullName;
+    clientPhoneCtrl.text = user.phoneNumber.trim().startsWith('+')
+        ? user.phoneNumber
+        : '+998';
     _detectInitialPickupLocation();
   }
 
   @override
   void dispose() {
+    clientNameCtrl.dispose();
+    clientPhoneCtrl.dispose();
     noteCtrl.dispose();
     super.dispose();
   }
@@ -79,6 +90,28 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(label: strings.tr('senderInfo')),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppTextField(
+                    controller: clientNameCtrl,
+                    label: strings.tr('fullName'),
+                    prefixIcon: Icons.person_rounded,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppTextField(
+                    controller: clientPhoneCtrl,
+                    label: strings.tr('phoneNumber'),
+                    keyboardType: TextInputType.phone,
+                    prefixIcon: Icons.phone_rounded,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             GlassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,9 +262,34 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                         selected: passengers == count,
                         onSelected: (selected) {
                           if (selected) {
-                            setState(() => passengers = count);
+                            setState(() {
+                              passengers = count;
+                              if (passengers == 1 && clientGender == 'both') {
+                                clientGender = 'male';
+                              }
+                            });
                           }
                         },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _SectionTitle(label: strings.tr('passengerGender')),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: AppSpacing.xs,
+                    children: ['male', 'female', 'both'].map((gender) {
+                      final enabled = passengers > 1 || gender != 'both';
+                      return ChoiceChip(
+                        label: Text(_genderLabel(strings, gender)),
+                        selected: clientGender == gender,
+                        onSelected: !enabled
+                            ? null
+                            : (selected) {
+                                if (selected) {
+                                  setState(() => clientGender = gender);
+                                }
+                              },
                       );
                     }).toList(),
                   ),
@@ -415,6 +473,31 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     return strings.tr('tapToPickOnMap');
   }
 
+  String _effectiveClientName(AppState state) {
+    final input = clientNameCtrl.text.trim();
+    if (input.isNotEmpty) return input;
+    return state.currentUser.fullName;
+  }
+
+  String _effectiveClientPhone(AppState state) {
+    final input = clientPhoneCtrl.text.trim();
+    if (input.isNotEmpty) return input;
+    final userPhone = state.currentUser.phoneNumber.trim();
+    if (userPhone.isNotEmpty) return userPhone;
+    return '+998';
+  }
+
+  String _genderLabel(AppLocalizations strings, String gender) {
+    switch (gender) {
+      case 'male':
+        return strings.tr('genderMale');
+      case 'female':
+        return strings.tr('genderFemale');
+      default:
+        return strings.tr('genderBoth');
+    }
+  }
+
   double? _calculatePrice(AppState state) {
     if (fromRegion == null || toRegion == null) {
       return null;
@@ -435,8 +518,9 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     setState(() => confirming = true);
     await Future.delayed(const Duration(milliseconds: 350));
     if (!mounted) return;
+    final state = context.read<AppState>();
     final strings = context.strings;
-    if (!context.read<AppState>().isAuthenticated) {
+    if (!state.isAuthenticated) {
       await ensureLoggedIn(context);
       if (mounted) {
         setState(() => confirming = false);
@@ -450,6 +534,8 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
       builder: (dialogContext) {
         final dialogStrings = dialogContext.strings;
         final scheduledTimeLabel = scheduledTime.format(dialogContext);
+        final clientName = _effectiveClientName(state);
+        final clientPhone = _effectiveClientPhone(state);
         return GlassCard(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -462,6 +548,10 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: AppSpacing.md),
+              _SummaryRow(
+                label: dialogStrings.tr('sender'),
+                value: '$clientName\n$clientPhone',
+              ),
               _SummaryRow(
                 label: dialogStrings.tr('fromLocation'),
                 value: '${fromRegion!}, ${fromDistrict!}',
@@ -483,6 +573,10 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
                 value: passengers == 4
                     ? dialogStrings.tr('fullCar')
                     : passengers.toString(),
+              ),
+              _SummaryRow(
+                label: dialogStrings.tr('passengerGender'),
+                value: _genderLabel(dialogStrings, clientGender),
               ),
               _SummaryRow(
                 label: dialogStrings.tr('date'),
@@ -529,10 +623,9 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
     final state = context.read<AppState>();
     final strings = context.strings;
     final loggedIn = await ensureLoggedIn(context, showMessage: false);
+    if (!mounted) return;
     if (!loggedIn) {
-      if (mounted) {
-        setState(() => confirming = false);
-      }
+      setState(() => confirming = false);
       return;
     }
     if (pickupLocation == null) {
@@ -548,10 +641,13 @@ class _TaxiOrderPageState extends State<TaxiOrderPage> {
         toRegion: toRegion!,
         toDistrict: toDistrict!,
         passengers: passengers,
+        clientGender: clientGender,
         scheduledDate: selectedDate,
         scheduledTime: scheduledTime,
         pickupLocation: pickupLocation!,
         note: noteCtrl.text,
+        customerName: clientNameCtrl.text,
+        customerPhone: clientPhoneCtrl.text,
       );
 
       if (!mounted) return;

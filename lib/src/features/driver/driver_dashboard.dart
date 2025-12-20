@@ -7,13 +7,42 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/auth_api.dart';
+import '../../localization/app_localizations.dart';
 import '../../localization/localization_ext.dart';
+import '../../models/location.dart';
 import '../../models/order.dart';
 import '../../state/app_state.dart';
 import 'driver_order_history_page.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
 import '../../core/design_tokens.dart';
+
+const Color _brandTeal = Color(0xFF029688); // #029688
+const Color _brandTealDeep = Color(0xFF016B61);
+const Color _brandTealBright = Color(0xFF1FC5B2);
+const Color _brandTealGlow = Color(0xFF55E5D3);
+
+const List<Color> _driverBackgroundGradient = [
+  _brandTealDeep,
+  _brandTeal,
+  _brandTealGlow,
+];
+
+const List<Color> _driverBalanceGradient = [
+  _brandTealBright,
+  _brandTeal,
+  _brandTealDeep,
+];
+
+const List<Color> _driverStatGradient = [
+  _brandTealBright,
+  _brandTealDeep,
+];
+
+const List<Color> _driverStatAltGradient = [
+  _brandTealGlow,
+  _brandTeal,
+];
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
@@ -57,19 +86,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
     final isDark = theme.brightness == Brightness.dark;
     final onTint = colorScheme.onPrimary;
     final onTintMuted = onTint.withValues(alpha: 0.78);
-    final balanceGradient = [
-      const Color(0xFF6366F1), // Indigo
-      const Color(0xFF8B5CF6), // Purple
-      const Color(0xFFA855F7), // Violet
-    ];
-    final statGradient = [
-      const Color(0xFF10B981), // Emerald
-      const Color(0xFF059669), // Green
-    ];
-    final statAltGradient = [
-      const Color(0xFFF59E0B), // Amber
-      const Color(0xFFEF4444), // Red
-    ];
+    const backgroundGradient = _driverBackgroundGradient;
+    const balanceGradient = _driverBalanceGradient;
+    const statGradient = _driverStatGradient;
+    const statAltGradient = _driverStatAltGradient;
     _drainDriverRealtimeToasts(state);
     final user = state.currentUser;
     final stats = state.driverStats;
@@ -109,223 +129,242 @@ class _DriverDashboardState extends State<DriverDashboard> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (loading) ...[
-              const LinearProgressIndicator(),
-              const SizedBox(height: 16),
-            ],
-            _tintedCard(
-              gradient: balanceGradient,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: onTint.withValues(alpha: isDark ? 0.12 : 0.1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colorScheme.primary.withValues(alpha: 0.22),
-                          blurRadius: 16,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.account_balance_wallet_rounded,
-                      size: 28,
-                      color: onTint,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          strings.tr('currentBalance'),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: onTintMuted,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: backgroundGradient,
+            stops: const [0.0, 0.55, 1.0],
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    if (loading) ...[
+                      const LinearProgressIndicator(),
+                      const SizedBox(height: 16),
+                    ],
+                    _tintedCard(
+                      gradient: balanceGradient,
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: onTint.withValues(alpha: isDark ? 0.12 : 0.1),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.primary.withValues(alpha: 0.22),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.account_balance_wallet_rounded,
+                              size: 28,
+                              color: onTint,
+                            ),
                           ),
-                        ),
-                        Text(
-                          NumberFormat.currency(
-                            symbol: 'so\'m ',
-                            decimalDigits: 0,
-                          ).format(balance),
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: onTint,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  strings.tr('currentBalance'),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: onTintMuted,
+                                  ),
+                                ),
+                                Text(
+                                  NumberFormat.currency(
+                                    symbol: 'so\'m ',
+                                    decimalDigits: 0,
+                                  ).format(balance),
+                                  style: theme.textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: onTint,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _tintedCard(
-                    gradient: statGradient,
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          strings.tr('todayStats'),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: onTintMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          strings
-                              .tr('ordersCount')
-                              .replaceFirst('{count}', todayCount.toString()),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: onTint,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          NumberFormat.currency(
-                            symbol: 'so\'m ',
-                            decimalDigits: 0,
-                          ).format(totalToday),
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: onTint,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _tintedCard(
-                    gradient: statAltGradient,
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          strings.tr('monthStats'),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: onTintMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          strings
-                              .tr('ordersCount')
-                              .replaceFirst('{count}', monthCount.toString()),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: onTint,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          NumberFormat.currency(
-                            symbol: 'so\'m ',
-                            decimalDigits: 0,
-                          ).format(totalMonth),
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: onTint,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    icon: const Icon(Icons.move_to_inbox_rounded),
-                    label: Text(strings.tr('incomingOrders')),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const DriverIncomingOrdersPage(),
+                        ],
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    icon: const Icon(Icons.history_rounded),
-                    label: Text(strings.tr('orderHistory')),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const DriverOrderHistoryPage(),
-                      ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _tintedCard(
+                            gradient: statGradient,
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  strings.tr('todayStats'),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: onTintMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  strings
+                                      .tr('ordersCount')
+                                      .replaceFirst('{count}', todayCount.toString()),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: onTint,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  NumberFormat.currency(
+                                    symbol: 'so\'m ',
+                                    decimalDigits: 0,
+                                  ).format(totalToday),
+                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: onTint,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _tintedCard(
+                            gradient: statAltGradient,
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  strings.tr('monthStats'),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: onTintMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  strings
+                                      .tr('ordersCount')
+                                      .replaceFirst('{count}', monthCount.toString()),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: onTint,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  NumberFormat.currency(
+                                    symbol: 'so\'m ',
+                                    decimalDigits: 0,
+                                  ).format(totalMonth),
+                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: onTint,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            Text(
-              strings.tr('activeOrders'),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            if (state.driverActiveOrders.length >= 20 ||
-                state.driverActiveHasMore)
-              Center(
-                child: ElevatedButton(
-                  onPressed: _loadMoreDriverOrders,
-                  child: Text(strings.tr('more')),
-                ),
-              ),
-            const SizedBox(height: 12),
-            if (activeOrders.isEmpty)
-              GlassCard(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: Text(strings.tr('noActiveDriverOrders')),
-                  ),
-                ),
-              )
-            else
-              Column(
-                children: activeOrders
-                    .map(
-                      (order) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _ActiveOrderTile(
-                          key: ValueKey(order.id),
-                          order: order,
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.tonalIcon(
+                            icon: const Icon(Icons.move_to_inbox_rounded),
+                            label: Text(strings.tr('incomingOrders')),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const DriverIncomingOrdersPage(),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            icon: const Icon(Icons.history_rounded),
+                            label: Text(strings.tr('orderHistory')),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const DriverOrderHistoryPage(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      strings.tr('activeOrders'),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    if (state.driverActiveOrders.length >= 20 ||
+                        state.driverActiveHasMore)
+                      Center(
+                        child: ElevatedButton(
+                          onPressed: _loadMoreDriverOrders,
+                          child: Text(strings.tr('more')),
                         ),
                       ),
-                    )
-                    .toList(),
+                    const SizedBox(height: 12),
+                    if (activeOrders.isEmpty)
+                      GlassCard(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: Text(strings.tr('noActiveDriverOrders')),
+                          ),
+                        ),
+                      )
+                    else
+                      Column(
+                        children: activeOrders
+                            .map(
+                              (order) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _ActiveOrderTile(
+                                  key: ValueKey(order.id),
+                                  order: order,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    if (state.isLoadingMoreDriverActive)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
-            if (state.isLoadingMoreDriverActive)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            const SizedBox(height: 32),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -533,40 +572,38 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
     await _applyFilters(
       orderType: value,
       fromRegionId: state.driverIncomingFromRegionFilter,
-      toRegionId: state.driverIncomingToRegionFilter,
+      toRegionIds: state.driverIncomingToRegionFilters,
     );
   }
 
   Future<void> _onFromRegionChanged(int? regionId) async {
     final state = context.read<AppState>();
-    var toRegionId = state.driverIncomingToRegionFilter;
-    if (regionId != null && toRegionId == regionId) {
-      toRegionId = null;
-    }
+    final updatedToRegions = state.driverIncomingToRegionFilters
+        .where((id) => regionId == null || id != regionId)
+        .toSet();
     await _applyFilters(
       orderType: state.driverIncomingTypeFilter,
       fromRegionId: regionId,
-      toRegionId: toRegionId,
+      toRegionIds: updatedToRegions,
     );
   }
 
-  Future<void> _onToRegionChanged(int? regionId) async {
+  Future<void> _onToRegionsChanged(Set<int> regionIds) async {
     final state = context.read<AppState>();
-    var fromRegionId = state.driverIncomingFromRegionFilter;
-    if (regionId != null && fromRegionId == regionId) {
-      fromRegionId = null;
-    }
+    final fromRegionId = state.driverIncomingFromRegionFilter;
+    final sanitized = regionIds.toSet()
+      ..removeWhere((id) => fromRegionId != null && id == fromRegionId);
     await _applyFilters(
       orderType: state.driverIncomingTypeFilter,
       fromRegionId: fromRegionId,
-      toRegionId: regionId,
+      toRegionIds: sanitized,
     );
   }
 
   Future<void> _applyFilters({
     OrderType? orderType,
     int? fromRegionId,
-    int? toRegionId,
+    Set<int>? toRegionIds,
   }) async {
     if (_refreshing) return;
     setState(() => _refreshing = true);
@@ -574,7 +611,7 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
       await context.read<AppState>().updateDriverIncomingFilters(
         orderType: orderType,
         fromRegionId: fromRegionId,
-        toRegionId: toRegionId,
+        toRegionIds: toRegionIds,
       );
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -594,11 +631,223 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
     }
   }
 
+  Color _selectFillColor(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    final base = theme.colorScheme.surface;
+    final overlay = theme.colorScheme.primary.withValues(
+      alpha: isDark ? 0.22 : 0.08,
+    );
+    return Color.alphaBlend(
+      overlay,
+      base.withValues(alpha: isDark ? 0.85 : 0.98),
+    );
+  }
+
+  InputDecoration _selectDecoration(ThemeData theme, String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: theme.textTheme.labelMedium?.copyWith(
+        color: theme.colorScheme.primary,
+        fontWeight: FontWeight.w700,
+      ),
+      floatingLabelBehavior: FloatingLabelBehavior.always,
+      contentPadding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+      filled: true,
+      fillColor: _selectFillColor(theme),
+      border: OutlineInputBorder(
+        borderRadius: AppRadii.pillRadius,
+        borderSide: BorderSide.none,
+      ),
+    );
+  }
+
+  BoxDecoration _selectShadow(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    return BoxDecoration(
+      borderRadius: AppRadii.pillRadius,
+      boxShadow: [
+        BoxShadow(
+          color: theme.colorScheme.primary.withValues(
+            alpha: isDark ? 0.26 : 0.14,
+          ),
+          blurRadius: 24,
+          offset: const Offset(0, 12),
+          spreadRadius: 1,
+        ),
+      ],
+    );
+  }
+
+  TextStyle? _selectValueTextStyle(
+    ThemeData theme, {
+    required bool placeholder,
+  }) {
+    return theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w800,
+      color: placeholder
+          ? theme.hintColor.withValues(alpha: 0.9)
+          : theme.colorScheme.onSurface,
+    );
+  }
+
+  Future<void> _showToRegionPicker(
+    List<RegionModel> options,
+    Set<int> selected,
+  ) async {
+    final strings = context.strings;
+    final theme = Theme.of(context);
+    final state = context.read<AppState>();
+    final allOptionIds = options.map((r) => r.id).toSet();
+    final tempSelected =
+        selected.isEmpty ? allOptionIds.toSet() : selected.toSet();
+    final result = await showModalBottomSheet<Set<int>>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        final padding = MediaQuery.of(sheetContext).padding;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, padding.bottom + 12),
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        strings.tr('toRegionFilter'),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => setModalState(() {
+                          tempSelected
+                            ..clear()
+                            ..addAll(allOptionIds);
+                        }),
+                        child: Text(strings.tr('allRegions')),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 420),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: options.length,
+                      itemBuilder: (context, index) {
+                        final region = options[index];
+                        final checked = tempSelected.contains(region.id);
+                        return CheckboxListTile(
+                          value: checked,
+                          onChanged: (value) {
+                            setModalState(() {
+                              if (value == true) {
+                                tempSelected.add(region.id);
+                              } else {
+                                tempSelected.remove(region.id);
+                              }
+                            });
+                          },
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(state.regionLabel(region)),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(
+                        tempSelected.toSet(),
+                      ),
+                      child: Text(strings.tr('save')),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (result != null) {
+      await _onToRegionsChanged(result);
+    }
+  }
+
+  Widget _buildToRegionField({
+    required ThemeData theme,
+    required AppState state,
+    required List<RegionModel> options,
+    required Set<int> selected,
+    required String label,
+    required String placeholder,
+  }) {
+    final decoration = _selectDecoration(theme, label).copyWith(
+      suffixIcon: const Icon(Icons.arrow_drop_down_rounded),
+      suffixIconColor: theme.colorScheme.onSurfaceVariant,
+      suffixIconConstraints: const BoxConstraints(minWidth: 40),
+    );
+    String summaryText() {
+      if (selected.length == options.length && options.isNotEmpty) {
+        return placeholder;
+      }
+      if (selected.isEmpty) return placeholder;
+      if (selected.length == 1) {
+        final id = selected.first;
+        final label = state.regionLabelById(id);
+        return label.isEmpty ? '#$id' : label;
+      }
+      final labels = selected
+          .map((id) => state.regionLabelById(id))
+          .map((label) => label.isEmpty ? null : label)
+          .whereType<String>()
+          .toList();
+      if (labels.isEmpty) return '${selected.length}';
+      if (labels.length == 1) return '${labels.first} (+${selected.length - 1})';
+      return '${labels.first}, ${labels[1]}${selected.length > 2 ? ' +' '${selected.length - 2}' : ''}';
+    }
+    return DecoratedBox(
+      decoration: _selectShadow(theme),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: AppRadii.pillRadius,
+          onTap: () => _showToRegionPicker(options, selected),
+          child: InputDecorator(
+            decoration: decoration,
+            isEmpty: selected.isEmpty,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
+              child: Text(
+                summaryText(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _selectValueTextStyle(
+                  theme,
+                  placeholder: selected.isEmpty,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.strings;
     final state = context.watch<AppState>();
     final theme = Theme.of(context);
+    const backgroundGradient = _driverBackgroundGradient;
     final pendingOrders = state.driverAvailableOrders.where((order) {
       final viewers = state.driverOrderViewerCount(order.id);
       final holdActive = state.isDriverOrderPreviewActive(order.id);
@@ -606,10 +855,10 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
     }).toList();
     final orderTypeFilter = state.driverIncomingTypeFilter;
     final fromRegionFilter = state.driverIncomingFromRegionFilter;
-    final toRegionFilter = state.driverIncomingToRegionFilter;
+    final toRegionFilters = state.driverIncomingToRegionFilters;
     final regionOptions = state.regionOptions;
     final fromRegionOptions = regionOptions
-        .where((region) => region.id != toRegionFilter)
+        .where((region) => !toRegionFilters.contains(region.id))
         .toList(growable: false);
     final toRegionOptions = regionOptions
         .where((region) => region.id != fromRegionFilter)
@@ -635,98 +884,144 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
+                DecoratedBox(
+                  decoration: _selectShadow(theme),
                   child: DropdownButtonFormField<int?>(
                     value: fromRegionFilter,
                     isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: strings.tr('fromRegionFilter'),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                    icon: const Icon(Icons.arrow_drop_down_rounded),
+                    dropdownColor: _selectFillColor(theme),
+                    style: _selectValueTextStyle(theme, placeholder: false),
+                    decoration: _selectDecoration(
+                      theme,
+                      strings.tr('fromRegionFilter'),
                     ),
                     items: [
                       DropdownMenuItem<int?>(
                         value: null,
-                        child: Text(strings.tr('allRegions')),
+                        child: Text(
+                          strings.tr('allRegions'),
+                          style: _selectValueTextStyle(
+                            theme,
+                            placeholder: true,
+                          ),
+                        ),
                       ),
                       ...fromRegionOptions.map(
                         (region) => DropdownMenuItem<int?>(
                           value: region.id,
-                          child: Text(state.regionLabel(region)),
+                          child: Text(
+                            state.regionLabel(region),
+                            style: _selectValueTextStyle(
+                              theme,
+                              placeholder: false,
+                            ),
+                          ),
                         ),
                       ),
                     ],
+                    selectedItemBuilder: (context) {
+                      final labels = [
+                        strings.tr('allRegions'),
+                        ...fromRegionOptions.map(state.regionLabel),
+                      ];
+                      return [
+                        for (var i = 0; i < labels.length; i++)
+                          Text(
+                            labels[i],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _selectValueTextStyle(
+                              theme,
+                              placeholder:
+                                  i == 0 && fromRegionFilter == null,
+                            ),
+                          ),
+                      ];
+                    },
                     onChanged: (value) => _onFromRegionChanged(value),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: DropdownButtonFormField<int?>(
-                    value: toRegionFilter,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: strings.tr('toRegionFilter'),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    items: [
-                      DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text(strings.tr('allRegions')),
-                      ),
-                      ...toRegionOptions.map(
-                        (region) => DropdownMenuItem<int?>(
-                          value: region.id,
-                          child: Text(state.regionLabel(region)),
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) => _onToRegionChanged(value),
-                  ),
+                const SizedBox(height: AppSpacing.sm),
+                _buildToRegionField(
+                  theme: theme,
+                  state: state,
+                  options: toRegionOptions,
+                  selected: toRegionFilters,
+                  label: strings.tr('toRegionFilter'),
+                  placeholder: strings.tr('allRegions'),
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            DropdownButtonFormField<OrderType?>(
-              value: orderTypeFilter,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: strings.tr('orderTypeFilter'),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+            DecoratedBox(
+              decoration: _selectShadow(theme),
+              child: DropdownButtonFormField<OrderType?>(
+                value: orderTypeFilter,
+                isExpanded: true,
+                icon: const Icon(Icons.arrow_drop_down_rounded),
+                dropdownColor: _selectFillColor(theme),
+                style: _selectValueTextStyle(theme, placeholder: false),
+                decoration: _selectDecoration(
+                  theme,
+                  strings.tr('orderTypeFilter'),
                 ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                items: [
+                  DropdownMenuItem<OrderType?>(
+                    value: null,
+                    child: Text(
+                      strings.tr('any'),
+                      style: _selectValueTextStyle(
+                        theme,
+                        placeholder: true,
+                      ),
+                    ),
+                  ),
+                  DropdownMenuItem<OrderType?>(
+                    value: OrderType.taxi,
+                    child: Text(
+                      strings.tr('taxiOrder'),
+                      style: _selectValueTextStyle(
+                        theme,
+                        placeholder: false,
+                      ),
+                    ),
+                  ),
+                  DropdownMenuItem<OrderType?>(
+                    value: OrderType.delivery,
+                    child: Text(
+                      strings.tr('deliveryOrder'),
+                      style: _selectValueTextStyle(
+                        theme,
+                        placeholder: false,
+                      ),
+                    ),
+                  ),
+                ],
+                selectedItemBuilder: (context) {
+                  final labels = [
+                    strings.tr('any'),
+                    strings.tr('taxiOrder'),
+                    strings.tr('deliveryOrder'),
+                  ];
+                  return [
+                    for (var i = 0; i < labels.length; i++)
+                      Text(
+                        labels[i],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _selectValueTextStyle(
+                          theme,
+                          placeholder: i == 0 && orderTypeFilter == null,
+                        ),
+                      ),
+                  ];
+                },
+                onChanged: (value) => _onOrderTypeFilterChanged(value),
               ),
-              items: [
-                DropdownMenuItem<OrderType?>(
-                  value: null,
-                  child: Text(strings.tr('any')),
-                ),
-                DropdownMenuItem<OrderType?>(
-                  value: OrderType.taxi,
-                  child: Text(strings.tr('taxiOrder')),
-                ),
-                DropdownMenuItem<OrderType?>(
-                  value: OrderType.delivery,
-                  child: Text(strings.tr('deliveryOrder')),
-                ),
-              ],
-              onChanged: (value) => _onOrderTypeFilterChanged(value),
             ),
           ],
         ),
@@ -793,19 +1088,29 @@ class _DriverIncomingOrdersPageState extends State<DriverIncomingOrdersPage> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refreshOrders,
-        child: ListView(
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: backgroundGradient,
+            stops: const [0.0, 0.6, 1.0],
           ),
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.lg,
-            AppSpacing.lg,
-            AppSpacing.xl,
+        ),
+        child: RefreshIndicator(
+          onRefresh: _refreshOrders,
+          child: ListView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
+            children: children,
           ),
-          children: children,
         ),
       ),
     );
@@ -833,6 +1138,8 @@ class _PendingOrderTile extends StatelessWidget {
     final passengersLabel = strings
         .tr('passengersCount')
         .replaceFirst('{count}', order.passengers.toString());
+    final genderLabel =
+        _genderLabel(strings, order.clientGender, passengers: order.passengers);
     final priceLabel = order.priceAvailable
         ? NumberFormat.currency(
             symbol: 'so\'m ',
@@ -913,6 +1220,10 @@ class _PendingOrderTile extends StatelessWidget {
                       _InfoChip(
                         icon: Icons.group_rounded,
                         label: passengersLabel,
+                      ),
+                      _InfoChip(
+                        icon: Icons.wc_rounded,
+                        label: genderLabel,
                       ),
                       _InfoChip(
                         icon: Icons.payments_rounded,
@@ -1075,7 +1386,7 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE8F7F1),
+                          color: const Color(0xFFE2F5F2),
                           borderRadius: BorderRadius.circular(AppRadii.button),
                         ),
                         child: Row(
@@ -1083,7 +1394,7 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
                           children: [
                             const Icon(
                               Icons.verified_rounded,
-                              color: Color(0xFF10B981),
+                              color: Color(0xFF14B9A6),
                               size: 18,
                             ),
                             const SizedBox(width: 8),
@@ -1092,7 +1403,7 @@ class _ActiveOrderTileState extends State<_ActiveOrderTile> {
                                 confirmationInfo,
                                 style: Theme.of(context).textTheme.labelLarge
                                     ?.copyWith(
-                                      color: const Color(0xFF059669),
+                                      color: const Color(0xFF02786E),
                                       fontWeight: FontWeight.w700,
                                     ),
                                 overflow: TextOverflow.ellipsis,
@@ -1533,6 +1844,8 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
               .tr('reservedUntil')
               .replaceFirst('{time}', DateFormat.Hm().format(expiresAt))
         : null;
+    final genderLabel =
+        _genderLabel(strings, order.clientGender, passengers: order.passengers);
     final note = order.note?.trim();
     final phone = order.customerPhone?.trim() ?? '';
     final hasPhone = phone.isNotEmpty;
@@ -1623,6 +1936,12 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                   icon: Icons.group_rounded,
                   label: strings.tr('passengers'),
                   value: passengersLabel,
+                ),
+                _buildInfoRow(
+                  context,
+                  icon: Icons.wc_rounded,
+                  label: strings.tr('passengerGender'),
+                  value: genderLabel,
                 ),
                 _buildInfoRow(
                   context,
@@ -1853,4 +2172,22 @@ String _formatTimeOfDay(TimeOfDay time) {
   final hour = time.hour.toString().padLeft(2, '0');
   final minute = time.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+String _genderLabel(
+  AppLocalizations strings,
+  String? raw, {
+  required int passengers,
+}) {
+  final normalized = raw?.toLowerCase().trim();
+  switch (normalized) {
+    case 'male':
+      return strings.tr('genderMale');
+    case 'female':
+      return strings.tr('genderFemale');
+    case 'both':
+      return strings.tr('genderBoth');
+    default:
+      return strings.tr('genderBoth');
+  }
 }
