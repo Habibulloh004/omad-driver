@@ -245,7 +245,7 @@ class AppLocalizations {
       'viewOrderDetails': 'Tafsilotlarni ko‘rish',
       'callPassenger': 'Yo‘lovchiga qo‘ng‘iroq qilish',
       'callPassengerHint':
-          'Qabul qilishdan oldin 2 daqiqa ichida yo‘lovchi bilan bog‘laning.',
+          'Qabul qilishdan oldin {minutes} daqiqa ichida yo‘lovchi bilan bog‘laning.',
       'callPassengerUnavailable': 'Telefon raqami mavjud emas.',
       'cannotMakeCall': 'Qo‘ng‘iroq qilib bo‘lmadi. Raqam nusxalandi.',
       'copyNumber': 'Raqamni nusxalash',
@@ -256,11 +256,11 @@ class AppLocalizations {
       'releaseOrder': 'Buyurtmani rad etish',
       'orderReleaseSuccess': 'Buyurtma boshqa haydovchilarga ochildi.',
       'orderHoldMessage':
-          'Sizda buyurtmani tasdiqlash yoki rad etish uchun 2 daqiqa bor.',
+          'Sizda buyurtmani tasdiqlash yoki rad etish uchun {minutes} daqiqa bor.',
       'driversViewingCount': 'Hozir {count} haydovchi kuzatmoqda',
       'reservedUntil': '{time} gacha band qilingan',
       'orderHoldExpiredInfo':
-          '2 daqiqa yakunlandi. Buyurtma boshqa haydovchilarga ko‘rinadi.',
+          '{minutes} daqiqa yakunlandi. Buyurtma boshqa haydovchilarga ko‘rinadi.',
       'orderIdLabel': 'Buyurtma raqami: {id}',
       'markAllRead': 'Barchasini o‘qilgan deb belgilash',
       'notifDriverApplication': 'Haydovchi arizangiz qabul qilindi.',
@@ -477,7 +477,7 @@ class AppLocalizations {
       'viewOrderDetails': 'Тафсилотларни кўриш',
       'callPassenger': 'Йўловчига қўнғироқ қилиш',
       'callPassengerHint':
-          'Қабул қилишдан олдин 2 дақиқа ичида мижоз билан боғланинг.',
+          'Қабул қилишдан олдин {minutes} дақиқа ичида мижоз билан боғланинг.',
       'callPassengerUnavailable': 'Телефон рақами мавжуд эмас.',
       'cannotMakeCall': 'Қўнғироқ қилишнинг иложи бўлмади. Рақам нусхаланди.',
       'copyNumber': 'Рақамни нусхалаш',
@@ -488,11 +488,11 @@ class AppLocalizations {
       'releaseOrder': 'Буюртмани рад этиш',
       'orderReleaseSuccess': 'Буюртма яна бошқа ҳайдовчиларга очилди.',
       'orderHoldMessage':
-          'Сизда буюртмани тасдиқлаш ёки рад этиш учун 2 дақиқа бор.',
+          'Сизда буюртмани тасдиқлаш ёки рад этиш учун {minutes} дақиқа бор.',
       'driversViewingCount': 'Ҳозир {count} ҳайдовчи кўрмоқда',
       'reservedUntil': '{time} гача банд қилинган',
       'orderHoldExpiredInfo':
-          '2 дақиқа тугади. Буюртма бошқаларга тақдим этилди.',
+          '{minutes} дақиқа тугади. Буюртма бошқаларга тақдим этилди.',
       'orderIdLabel': 'Буюртма рақами: {id}',
       'markAllRead': 'Ҳаммасини ўқилган деб белгилаш',
       'notifDriverApplication': 'Ҳайдовчи аризангиз қабул қилинди.',
@@ -705,7 +705,7 @@ class AppLocalizations {
       'viewOrderDetails': 'Подробнее',
       'callPassenger': 'Позвонить пассажиру',
       'callPassengerHint':
-          'Вы можете связаться с пассажиром в течение 2 минут перед принятием заказа.',
+          'Вы можете связаться с пассажиром в течение {minutes} минут перед принятием заказа.',
       'callPassengerUnavailable': 'Номер недоступен.',
       'cannotMakeCall': 'Не удалось позвонить. Номер скопирован в буфер.',
       'copyNumber': 'Скопировать номер',
@@ -716,11 +716,11 @@ class AppLocalizations {
       'releaseOrder': 'Отказаться от заказа',
       'orderReleaseSuccess': 'Заказ вновь доступен другим водителям.',
       'orderHoldMessage':
-          'У вас есть 2 минут, чтобы связаться с пассажиром и принять решение.',
+          'У вас есть {minutes} минут, чтобы связаться с пассажиром и принять решение.',
       'driversViewingCount': 'Сейчас {count} водителей просматривают заказ',
       'reservedUntil': 'Резерв до {time}',
       'orderHoldExpiredInfo':
-          '2 минут истекли. Заказ снова виден другим водителям.',
+          '{minutes} минут истекли. Заказ снова виден другим водителям.',
       'orderIdLabel': 'Номер заказа: {id}',
       'markAllRead': 'Отметить все как прочитанные',
       'notifDriverApplication': 'Заявка водителя получена.',

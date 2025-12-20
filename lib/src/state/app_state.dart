@@ -34,7 +34,7 @@ class AppState extends ChangeNotifier {
   }
 
   static const Duration _sessionTTL = Duration(days: 7);
-  static const Duration _driverOrderPreviewWindow = Duration(minutes: 2);
+  static const int _defaultDriverOrderPreviewMinutes = 2;
   static const Duration _serverTimeOffset = Duration(hours: 5);
   static const int _ordersPageSize = 20;
   static const int _driverOrdersPageSize = 10;
@@ -89,6 +89,8 @@ class AppState extends ChangeNotifier {
       Queue<({String title, String message})>();
   final Queue<({String title, String message})> _driverRealtimeMessages =
       Queue<({String title, String message})>();
+  Duration _driverOrderPreviewWindow =
+      const Duration(minutes: _defaultDriverOrderPreviewMinutes);
   final Map<String, DateTime> _driverOrderPreviewAnchors = <String, DateTime>{};
   final Map<String, int> _driverOrderViewerCounts = <String, int>{};
   final Set<String> _ratedOrders = <String>{};
@@ -176,7 +178,8 @@ class AppState extends ChangeNotifier {
   bool get isLoadingMoreDriverCompleted => _driverCompletedLoadingMore;
   int driverOrderViewerCount(String orderId) =>
       _driverOrderViewerCounts[orderId] ?? 0;
-  Duration get driverOrderPreviewWindow => _driverOrderPreviewWindow;
+  Duration get driverOrderPreviewWindow =>
+      _sanitizeDriverPreviewWindow(_driverOrderPreviewWindow);
   DateTime? driverOrderPreviewStartedAt(String orderId) {
     _pruneDriverPreviewAnchors();
     return _driverOrderPreviewAnchors[orderId];
@@ -185,7 +188,7 @@ class AppState extends ChangeNotifier {
   DateTime? driverOrderPreviewExpiresAt(String orderId) {
     final started = driverOrderPreviewStartedAt(orderId);
     if (started == null) return null;
-    return started.add(_driverOrderPreviewWindow);
+    return started.add(driverOrderPreviewWindow);
   }
 
   Duration? driverOrderPreviewRemaining(String orderId) {
@@ -470,6 +473,10 @@ class AppState extends ChangeNotifier {
   Future<void> refreshDriverStatus({bool loadDashboard = false}) async {
     await _syncDriverContext(loadDashboard: loadDashboard);
     notifyListeners();
+  }
+
+  Future<void> refreshDriverPendingTimeSetting({bool silent = true}) async {
+    await _loadDriverPendingTimeSetting(silent: silent);
   }
 
   Future<void> loadRegions({bool force = false}) async {
@@ -967,6 +974,8 @@ class AppState extends ChangeNotifier {
     _lastDriverStatusEventId = null;
     _driverIncomingOrdersEnabled = true;
     _driverIncomingSoundEnabled = true;
+    _driverOrderPreviewWindow =
+        const Duration(minutes: _defaultDriverOrderPreviewMinutes);
     _driverOrderPreviewAnchors.clear();
     _driverOrderViewerCounts.clear();
     _lastPassengerOrderEvents.clear();
@@ -1144,6 +1153,22 @@ class AppState extends ChangeNotifier {
     if (removed) {
       notifyListeners();
     }
+  }
+
+  OrderType? _resolveDriverPreviewOrderType(String orderId) {
+    for (final order in _driverAvailableOrders) {
+      if (order.id == orderId) return order.type;
+    }
+    for (final order in _driverActiveOrders) {
+      if (order.id == orderId) return order.type;
+    }
+    for (final order in _driverCompletedOrders) {
+      if (order.id == orderId) return order.type;
+    }
+    for (final order in _orders) {
+      if (order.id == orderId) return order.type;
+    }
+    return null;
   }
 
   Future<void> updateDriverIncomingFilters({
@@ -1519,16 +1544,34 @@ class AppState extends ChangeNotifier {
     _bootstrapping = true;
     notifyListeners();
     try {
+      final pendingWindowFuture = _loadDriverPendingTimeSetting();
       await loadRegions(force: true);
       await Future.wait([
         refreshProfile(),
         refreshOrders(),
         refreshNotifications(),
+        pendingWindowFuture,
       ]);
       await _syncDriverContext(loadDashboard: true);
     } finally {
       _bootstrapping = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _loadDriverPendingTimeSetting({bool silent = true}) async {
+    try {
+      final minutes = await _api.fetchOrderPendingTimeMinutes();
+      if (minutes == null || minutes <= 0) return;
+      final window = _sanitizeDriverPreviewWindow(Duration(minutes: minutes));
+      if (window == _driverOrderPreviewWindow) return;
+      _driverOrderPreviewWindow = window;
+      _pruneDriverPreviewAnchors();
+      notifyListeners();
+    } on ApiException {
+      if (!silent) rethrow;
+    } catch (_) {
+      if (!silent) rethrow;
     }
   }
 
@@ -3154,6 +3197,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _pollDriverRealtime() async {
+    _releaseExpiredDriverPreviews();
     if (!_isAuthenticated ||
         !_currentUser.isDriver ||
         !_currentUser.driverApproved) {
@@ -3792,18 +3836,41 @@ class AppState extends ChangeNotifier {
 
   void _pruneDriverPreviewAnchors() {
     if (_driverOrderPreviewAnchors.isEmpty) return;
-    final now = DateTime.now();
-    final stale = <String>[];
-    _driverOrderPreviewAnchors.forEach((orderId, startedAt) {
-      if (startedAt.add(_driverOrderPreviewWindow).isBefore(now)) {
-        stale.add(orderId);
-      }
-    });
-    if (stale.isEmpty) return;
-    for (final orderId in stale) {
-      _driverOrderPreviewAnchors.remove(orderId);
+    _releaseExpiredDriverPreviews();
+  }
+
+  Duration _sanitizeDriverPreviewWindow(Duration window) {
+    if (window.inSeconds <= 0) {
+      return const Duration(minutes: _defaultDriverOrderPreviewMinutes);
     }
-    _persistDriverPreviewAnchors();
+    return window;
+  }
+
+  void _releaseExpiredDriverPreviews() {
+    if (!_isAuthenticated || !_currentUser.isDriver || !_currentUser.driverApproved) {
+      return;
+    }
+    if (_driverOrderPreviewAnchors.isEmpty) return;
+    final window = driverOrderPreviewWindow;
+    final now = DateTime.now();
+    final expired = _driverOrderPreviewAnchors.entries
+        .where(
+          (entry) =>
+              entry.value.add(window).isBefore(now),
+        )
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    if (expired.isEmpty) return;
+    for (final orderId in expired) {
+      final orderType = _resolveDriverPreviewOrderType(orderId);
+      if (orderType != null) {
+        releaseDriverOrderPreview(
+          orderId,
+          type: orderType,
+          reason: 'expired',
+        );
+      }
+    }
   }
 
   void _emitDriverRealtimeCommand({

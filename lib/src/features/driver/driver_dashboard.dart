@@ -390,6 +390,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
       await Future.wait([
         state.refreshProfile(),
         state.refreshDriverStatus(loadDashboard: true),
+        state.refreshDriverPendingTimeSetting(silent: true),
       ]);
     } on ApiException catch (error) {
       if (!silent && mounted) {
@@ -1774,6 +1775,10 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     }
   }
 
+  String _formatWithMinutes(String template, int minutes) {
+    return template.replaceAll('{minutes}', minutes.toString());
+  }
+
   String _formatRemaining() {
     final remaining = _remaining ?? Duration.zero;
     final minutes = remaining.inMinutes
@@ -1812,6 +1817,9 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
     final holdWindow = previewActive
         ? state.driverOrderPreviewWindow
         : Duration.zero;
+    final holdMinutes = state.driverOrderPreviewWindow.inMinutes > 0
+        ? state.driverOrderPreviewWindow.inMinutes
+        : 1;
     final totalSeconds = holdWindow.inSeconds;
     final rawSeconds = (_remaining ?? Duration.zero).inSeconds;
     final clampedSeconds = totalSeconds == 0
@@ -1898,7 +1906,10 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                 const SizedBox(height: 12),
                 if (widget.previewMode) ...[
                   Text(
-                    strings.tr('orderHoldMessage'),
+                    _formatWithMinutes(
+                      strings.tr('orderHoldMessage'),
+                      holdMinutes,
+                    ),
                     style: theme.textTheme.bodyMedium,
                   ),
                   if (reservedLabel != null) ...[
@@ -2003,7 +2014,10 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  strings.tr('callPassengerHint'),
+                  _formatWithMinutes(
+                    strings.tr('callPassengerHint'),
+                    holdMinutes,
+                  ),
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
@@ -2063,7 +2077,10 @@ class _DriverOrderDetailSheetState extends State<_DriverOrderDetailSheet> {
                   if (_expired) ...[
                     const SizedBox(height: 6),
                     Text(
-                      strings.tr('orderHoldExpiredInfo'),
+                      _formatWithMinutes(
+                        strings.tr('orderHoldExpiredInfo'),
+                        holdMinutes,
+                      ),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.error,
                       ),

@@ -549,6 +549,18 @@ class ApiClient {
     }
   }
 
+  Future<int?> fetchOrderPendingTimeMinutes() async {
+    final response = await _request(
+      'GET',
+      '/pending-time/',
+      authorized: true,
+    );
+    final map = _ensureMap(response);
+    final raw = map['setting_value'] ?? map['settingValue'];
+    final parsed = int.tryParse(raw?.toString() ?? '');
+    return parsed;
+  }
+
   Future<void> releaseDriverOrderPreview({
     required int id,
     required OrderType type,
